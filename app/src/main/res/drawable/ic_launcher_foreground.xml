@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- The Modern Stylized 'B' Base shape with Glowing Blue Gradient -->
+    <path
+        android:pathData="M 32,22 
+                          C 32,17 36,15 42,15 
+                          L 58,15 
+                          C 70,15 78,23 78,33 
+                          C 78,41 72,47 64,49 
+                          C 74,51 80,58 80,68 
+                          C 80,79 71,87 56,87 
+                          L 42,87 
+                          C 36,87 32,85 32,80 
+                          Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="32"
+                android:startY="15"
+                android:endX="78"
+                android:endY="90"
+                android:type="linear">
+                <item android:offset="0.0" android:color="#00C2FF" /> <!-- Vibrant Sky Blue -->
+                <item android:offset="0.4" android:color="#0066FF" /> <!-- Rich Blue -->
+                <item android:offset="1.0" android:color="#1E3CF0" /> <!-- Deep Indigo Blue -->
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Soft shadow behind the white receipt paper to make it pop (3D effect) -->
+    <path
+        android:fillColor="#1F000000"
+        android:pathData="M 31,25 
+                          C 31,23 33,21 35,21 
+                          L 56,21 
+                          L 66,31 
+                          L 66,81 
+                          L 62,84 L 58,81 L 54,84 L 50,81 L 46,84 L 42,81 L 38,84 L 34,81 
+                          Z" />
+
+    <!-- The Crisp White Receipt Body -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 32,26 
+                          C 32,24 34,22 36,22 
+                          L 55,22 
+                          L 64,31 
+                          L 64,80 
+                          L 60,83 L 56,80 L 52,83 L 48,80 L 44,83 L 40,80 L 36,83 L 32,80 
+                          Z" />
+
+    <!-- Curved folded top-right corner of the receipt (gilded back fold) -->
+    <path
+        android:fillColor="#E3EAF5"
+        android:pathData="M 55,22 
+                          C 55,27 59,31 64,31 
+                          L 55,31 
+                          Z" />
+
+    <!-- The Elegant Indian Rupee Symbol (₹) on Receipt -->
+    <path
+        android:strokeColor="#0066FF"
+        android:strokeWidth="2.2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:pathData="M 38,30 L 47,30 
+                          M 38,35 L 45,35 
+                          M 43,30 C 43,30 45,32 45,35 C 45,39 41,41 38,41
+                          M 40,40 L 45,47" />
+
+    <!-- Primary blue highlight line on receipt -->
+    <path
+        android:strokeColor="#00C2FF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M 38,51 L 54,51" />
+
+    <!-- Content mock lines (items list) -->
+    <path
+        android:strokeColor="#A4B3C6"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M 38,57 L 48,57 
+                          M 38,63 L 51,63 
+                          M 38,69 L 45,69 
+                          M 38,75 L 50,75" />
+
+    <!-- Price details on the right of receipt -->
+    <path
+        android:strokeColor="#A4B3C6"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M 58,57 L 60,57 
+                          M 58,63 L 60,63 
+                          M 58,69 L 60,69 
+                          M 58,75 L 60,75" />
+
+</vector>

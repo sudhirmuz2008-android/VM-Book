@@ -1,0 +1,6 @@
+{
+  "name": "VM BOOK",
+  "description": "A lightweight and efficient billing application for small businesses to easily record and manage sales, purchases, and invoices offline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
