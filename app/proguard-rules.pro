@@ -14,8 +14,26 @@
 
 # Uncomment this to preserve the line number information for
 # debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+-keepattributes SourceFile,LineNumberTable,*Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Room database rules
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keep class * { @androidx.room.Dao *; }
+-keep class * { @androidx.room.Database *; }
+
+# Kotlinx Serialization rules
+-keepclassmembers class * {
+    *** Companion;
+    *** $serializer;
+}
+
+# Ignore JVM-only library warnings in Ktor and standard libraries
+-dontwarn java.lang.management.**
+-dontwarn javax.naming.**
+-dontwarn io.ktor.**
+

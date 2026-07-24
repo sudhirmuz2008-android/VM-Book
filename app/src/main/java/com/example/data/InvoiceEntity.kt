@@ -13,5 +13,8 @@ data class InvoiceEntity(
     val discount: Double = 0.0, // flat discount amount
     val tax: Double = 0.0, // percentage (e.g., 18.0)
     val totalAmount: Double = 0.0,
-    val notes: String = ""
+    val notes: String = "",
+    val isCreditSale: Boolean = false,
+    val outstandingAmount: Double = 0.0,
+    val dueDate: Long = 0L
 )

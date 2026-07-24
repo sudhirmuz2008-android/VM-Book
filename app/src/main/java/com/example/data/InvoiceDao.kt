@@ -26,6 +26,9 @@ interface InvoiceDao {
     @Query("DELETE FROM invoices WHERE id = :id")
     suspend fun deleteInvoiceById(id: Long)
 
+    @Query("UPDATE invoices SET outstandingAmount = :outstandingAmount WHERE id = :invoiceId")
+    suspend fun updateOutstandingAmount(invoiceId: Long, outstandingAmount: Double)
+
     @Query("SELECT DISTINCT name FROM invoice_items WHERE name != '' ORDER BY name ASC")
     fun getDistinctItemNames(): Flow<List<String>>
 
