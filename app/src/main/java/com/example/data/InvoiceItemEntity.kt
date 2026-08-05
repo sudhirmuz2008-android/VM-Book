@@ -23,5 +23,7 @@ data class InvoiceItemEntity(
     val name: String,
     val price: Double,
     val quantity: Double,
-    val totalPrice: Double
+    val totalPrice: Double,
+    val hsnCode: String? = null,
+    val discount: Double = 0.0
 )

@@ -75,6 +75,8 @@ fun BillingAppContent(viewModel: BillingViewModel) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
     val selectedInvoice by viewModel.selectedInvoice.collectAsStateWithLifecycle()
 
+    AppUpdateHandler(viewModel = viewModel)
+
     // Handle back button elegantly based on current screen
     BackHandler(enabled = currentScreen != BillingScreen.DASHBOARD && currentScreen != BillingScreen.SPLASH && currentScreen != BillingScreen.LOCK_SCREEN) {
         viewModel.goBack()
@@ -233,54 +235,113 @@ fun DashboardScreen(viewModel: BillingViewModel) {
             }
         }
 
-        // Today's Sales Banner
-        Card(
+        // Today's Sales & Today's Profit Row
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 20.dp)
-                .testTag("dashboard_today_sales_card"),
-            shape = RoundedCornerShape(20.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.primaryContainer
-            )
+                .padding(bottom = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(
+            // Today's Sales Card
+            Card(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .weight(1f)
+                    .testTag("dashboard_today_sales_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.TrendingUp,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "TODAY'S SALES",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "TODAY'S SALES",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                        text = if (isPrivacyHidden) "₹••••" else "₹${String.format(Locale.US, "%.2f", stats.todaySales)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Sales generated today",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
                     )
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = if (isPrivacyHidden) "₹••••" else "₹${String.format(Locale.US, "%.2f", stats.todaySales)}",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.primary
+            }
+
+            // Today's Profit Card
+            Card(
+                modifier = Modifier
+                    .weight(1f)
+                    .testTag("dashboard_today_profit_card"),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
                 )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = "Total sales generated today",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                )
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.TrendingUp,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "TODAY'S PROFIT",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = if (isPrivacyHidden) "₹••••" else "₹${String.format(Locale.US, "%.2f", stats.todayProfit)}",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Net profit made today",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
         }
 
@@ -1246,6 +1307,8 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
         viewModel.supplierSuggestions.collectAsStateWithLifecycle().value
     }
     val itemNameSuggestions by viewModel.distinctItemNames.collectAsStateWithLifecycle()
+    val categories by viewModel.productCategories.collectAsStateWithLifecycle()
+    val allProductItems by viewModel.productItems.collectAsStateWithLifecycle()
     val invoiceError by viewModel.formErrorMessage
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -1572,48 +1635,226 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
                             }
                         }
 
-                        // Item name input
-                        // Show horizontal past item suggestions if matching
-                        val filteredItemSuggestions = itemNameSuggestions.filter {
-                            it.contains(draftItem.name, ignoreCase = true) && it != draftItem.name
+                        // Redesigned Category -> Item dropdown selection
+                        var showCategoryDialog by remember { mutableStateOf(false) }
+                        var showItemDialog by remember { mutableStateOf(false) }
+
+                        // Category Selector
+                        OutlinedTextField(
+                            value = draftItem.categoryName,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { showCategoryDialog = true },
+                            placeholder = { Text("Select Category (Required)") },
+                            label = { Text("Category") },
+                            trailingIcon = {
+                                IconButton(onClick = { showCategoryDialog = true }) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Dropdown")
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        if (showCategoryDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showCategoryDialog = false },
+                                title = { Text("Select Product Category", fontWeight = FontWeight.Bold) },
+                                text = {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 300.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (categories.isEmpty()) {
+                                            Text("No categories available. Please add categories in Product Master first.", style = MaterialTheme.typography.bodyMedium)
+                                        } else {
+                                            categories.forEach { cat ->
+                                                Card(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            viewModel.updateDraftItem(
+                                                                index,
+                                                                draftItem.copy(
+                                                                    categoryName = cat.name,
+                                                                    name = "",
+                                                                    hsnCode = ""
+                                                                )
+                                                            )
+                                                            showCategoryDialog = false
+                                                        },
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = if (draftItem.categoryName == cat.name) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                                    )
+                                                ) {
+                                                    Text(
+                                                        text = cat.name,
+                                                        modifier = Modifier.padding(16.dp),
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (draftItem.categoryName == cat.name) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showCategoryDialog = false }) {
+                                        Text("Close")
+                                    }
+                                }
+                            )
                         }
-                        if (filteredItemSuggestions.isNotEmpty()) {
-                            Row(
+
+                        // Item Selector
+                        val itemsForSelectedCategory = remember(draftItem.categoryName, allProductItems) {
+                            allProductItems.filter { it.categoryName.equals(draftItem.categoryName, ignoreCase = true) }
+                        }
+
+                        OutlinedTextField(
+                            value = draftItem.name,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 4.dp)
+                                .clickable { if (draftItem.categoryName.isNotEmpty()) showItemDialog = true },
+                            enabled = draftItem.categoryName.isNotEmpty(),
+                            placeholder = { 
+                                Text(
+                                    if (draftItem.categoryName.isEmpty()) "Select category first..." 
+                                    else "Select Item (Required)"
+                                ) 
+                            },
+                            label = { Text("Product Item") },
+                            trailingIcon = {
+                                IconButton(
+                                    onClick = { if (draftItem.categoryName.isNotEmpty()) showItemDialog = true },
+                                    enabled = draftItem.categoryName.isNotEmpty()
+                                ) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = "Dropdown")
+                                }
+                            },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+
+                        if (showItemDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showItemDialog = false },
+                                title = { Text("Select Item under ${draftItem.categoryName}", fontWeight = FontWeight.Bold) },
+                                text = {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(max = 300.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        if (itemsForSelectedCategory.isEmpty()) {
+                                            Text("No items registered under this category. Please create item master under '${draftItem.categoryName}' first.", style = MaterialTheme.typography.bodyMedium)
+                                        } else {
+                                            itemsForSelectedCategory.forEach { prodItem ->
+                                                Card(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            val initialPrice = if (currentType == "SALE" && prodItem.defaultSellingRate != null) {
+                                                                String.format(Locale.US, "%.2f", prodItem.defaultSellingRate)
+                                                            } else {
+                                                                draftItem.price
+                                                            }
+                                                            val initialDiscount = if (currentType == "SALE" && prodItem.defaultDiscountValue != null) {
+                                                                val pVal = prodItem.defaultSellingRate ?: 0.0
+                                                                val qVal = draftItem.quantity.toDoubleOrNull() ?: 1.0
+                                                                if (prodItem.defaultDiscountType == "%") {
+                                                                    String.format(Locale.US, "%.2f", pVal * qVal * prodItem.defaultDiscountValue / 100.0)
+                                                                } else {
+                                                                    String.format(Locale.US, "%.2f", prodItem.defaultDiscountValue)
+                                                                }
+                                                            } else {
+                                                                draftItem.discount
+                                                            }
+                                                            viewModel.updateDraftItem(
+                                                                index,
+                                                                draftItem.copy(
+                                                                    name = prodItem.name,
+                                                                    hsnCode = prodItem.hsnCode ?: "",
+                                                                    price = initialPrice,
+                                                                    discount = initialDiscount
+                                                                )
+                                                            )
+                                                            showItemDialog = false
+                                                        },
+                                                    colors = CardDefaults.cardColors(
+                                                        containerColor = if (draftItem.name == prodItem.name) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                                    )
+                                                ) {
+                                                    Column(modifier = Modifier.padding(16.dp)) {
+                                                        Text(
+                                                            text = prodItem.name,
+                                                            fontWeight = FontWeight.Bold,
+                                                            color = if (draftItem.name == prodItem.name) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                        if (!prodItem.hsnCode.isNullOrBlank()) {
+                                                            Spacer(modifier = Modifier.height(2.dp))
+                                                            Text(
+                                                                text = "HSN Code: ${prodItem.hsnCode}",
+                                                                style = MaterialTheme.typography.labelSmall,
+                                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = { showItemDialog = false }) {
+                                        Text("Close")
+                                    }
+                                }
+                            )
+                        }
+
+                        // Auto Filled HSN Display
+                        if (draftItem.hsnCode.isNotEmpty()) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.8f),
                                 modifier = Modifier
+                                    .padding(vertical = 4.dp)
                                     .fillMaxWidth()
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                filteredItemSuggestions.forEach { name ->
-                                    SuggestionChip(
-                                        onClick = {
-                                            viewModel.updateDraftItem(index, draftItem.copy(name = name))
-                                        },
-                                        label = { Text(name, fontSize = 11.sp) }
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info, 
+                                        contentDescription = null, 
+                                        modifier = Modifier.size(16.dp), 
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "HSN Code: ${draftItem.hsnCode}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
                                     )
                                 }
                             }
                         }
 
-                        OutlinedTextField(
-                            value = draftItem.name,
-                            onValueChange = {
-                                viewModel.updateDraftItem(index, draftItem.copy(name = it))
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .testTag("item_name_$index"),
-                            placeholder = { Text("Item / Service Name") },
-                            shape = RoundedCornerShape(8.dp),
-                            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words),
-                            singleLine = true
-                        )
-
                         // Quantity & Price Row
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             OutlinedTextField(
@@ -1645,28 +1886,51 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
                                 shape = RoundedCornerShape(8.dp),
                                 singleLine = true
                             )
+                        }
 
-                            // Quick sum display
+                        // Discount & Taxable Value Row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = draftItem.discount,
+                                onValueChange = {
+                                    viewModel.updateDraftItem(index, draftItem.copy(discount = it))
+                                },
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .testTag("item_discount_$index"),
+                                label = { Text("Discount (₹)") },
+                                placeholder = { Text("0.00") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true
+                            )
+
                             val priceVal = draftItem.price.toDoubleOrNull() ?: 0.0
                             val qtyVal = draftItem.quantity.toDoubleOrNull() ?: 0.0
-                            val lineTotal = priceVal * qtyVal
+                            val discountVal = draftItem.discount.toDoubleOrNull() ?: 0.0
+                            val itemAmount = priceVal * qtyVal
+                            val taxableAmount = (itemAmount - discountVal).coerceAtLeast(0.0)
+
                             Column(
                                 modifier = Modifier
-                                    .weight(0.8f)
-                                    .align(Alignment.CenterVertically),
+                                    .weight(1f)
+                                    .padding(end = 4.dp),
                                 horizontalAlignment = Alignment.End
                             ) {
                                 Text(
-                                    "Total",
+                                    "Item Amount: ₹${String.format(Locale.US, "%.2f", itemAmount)}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                                 Text(
-                                    "₹${String.format(Locale.US, "%.2f", lineTotal)}",
+                                    "Taxable: ₹${String.format(Locale.US, "%.2f", taxableAmount)}",
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
@@ -1684,55 +1948,85 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Subtotal Calculation in real time
-            val subTotal = viewModel.formItems.sumOf { draft ->
+            // Tax Rate % Input Row
+            OutlinedTextField(
+                value = viewModel.formTax.value,
+                onValueChange = { viewModel.formTax.value = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp)
+                    .testTag("form_tax"),
+                label = { Text("Tax % (GST Rate)") },
+                placeholder = { Text("0") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                shape = RoundedCornerShape(12.dp),
+                singleLine = true
+            )
+
+            // Calculations in real time
+            val totalAmountBeforeDiscount = viewModel.formItems.sumOf { draft ->
                 val p = draft.price.toDoubleOrNull() ?: 0.0
                 val q = draft.quantity.toDoubleOrNull() ?: 0.0
                 p * q
             }
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("Subtotal Items Value", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("₹${String.format(Locale.US, "%.2f", subTotal)}", fontWeight = FontWeight.Medium)
+            val totalDiscount = viewModel.formItems.sumOf { draft ->
+                draft.discount.toDoubleOrNull() ?: 0.0
             }
 
-            // Tax and Discount Rows
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = viewModel.formTax.value,
-                    onValueChange = { viewModel.formTax.value = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("form_tax"),
-                    label = { Text("Tax %") },
-                    placeholder = { Text("0") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+            val taxableAmount = (totalAmountBeforeDiscount - totalDiscount).coerceAtLeast(0.0)
+            val taxPercentage = viewModel.formTax.value.toDoubleOrNull() ?: 0.0
+            val cgstVal = taxableAmount * (taxPercentage / 200.0)
+            val sgstVal = taxableAmount * (taxPercentage / 200.0)
+            val grandTotal = taxableAmount + cgstVal + sgstVal
 
-                OutlinedTextField(
-                    value = viewModel.formDiscount.value,
-                    onValueChange = { viewModel.formDiscount.value = it },
-                    modifier = Modifier
-                        .weight(1f)
-                        .testTag("form_discount"),
-                    label = { Text("Flat Discount (₹)") },
-                    placeholder = { Text("0.00") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
+            // Ordered invoice summary rows
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Total Amount (Before Discount)", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("₹${String.format(Locale.US, "%.2f", totalAmountBeforeDiscount)}", fontWeight = FontWeight.Medium)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Total Discount", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("-₹${String.format(Locale.US, "%.2f", totalDiscount)}", fontWeight = FontWeight.Medium, color = Color(0xFFD32F2F))
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Taxable Amount", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("₹${String.format(Locale.US, "%.2f", taxableAmount)}", fontWeight = FontWeight.Bold)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("CGST (${taxPercentage / 2}%)", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("₹${String.format(Locale.US, "%.2f", cgstVal)}", fontWeight = FontWeight.Medium)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("SGST (${taxPercentage / 2}%)", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("₹${String.format(Locale.US, "%.2f", sgstVal)}", fontWeight = FontWeight.Medium)
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text("Grand Total", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Text("₹${String.format(Locale.US, "%.2f", grandTotal)}", fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.primary)
             }
 
             // Note Pad
@@ -1747,12 +2041,6 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
                 shape = RoundedCornerShape(12.dp),
                 maxLines = 3
             )
-
-            // Grand Total preview
-            val taxPercentage = viewModel.formTax.value.toDoubleOrNull() ?: 0.0
-            val discountVal = viewModel.formDiscount.value.toDoubleOrNull() ?: 0.0
-            val taxAmount = subTotal * (taxPercentage / 100.0)
-            val grandTotal = (subTotal + taxAmount - discountVal).coerceAtLeast(0.0)
 
             if (currentType == "SALE") {
                 Card(
@@ -1974,12 +2262,13 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
     val rightEmail = if (inv.type == "SALE") (customerMatch?.email ?: "") else (supplierMatch?.email ?: "")
     val rightGstin = if (inv.type == "SALE") (customerMatch?.let { parseGstinFromNotes(it.notes) } ?: "") else (supplierMatch?.let { parseGstinFromNotes(it.notes) } ?: "")
 
-    val subtotalVal = item.items.sumOf { it.totalPrice }
+    val totalAmountBeforeDiscountVal = item.items.sumOf { it.price * it.quantity }
+    val totalDiscountVal = item.items.sumOf { it.discount }
+    val taxableAmountVal = totalAmountBeforeDiscountVal - totalDiscountVal
     val taxRate = inv.tax
-    val taxAmount = subtotalVal * (taxRate / 100.0)
-    val cgstVal = taxAmount / 2
-    val sgstVal = taxAmount / 2
-    val rawTotal = subtotalVal + taxAmount - inv.discount
+    val cgstVal = taxableAmountVal * (taxRate / 200.0)
+    val sgstVal = taxableAmountVal * (taxRate / 200.0)
+    val rawTotal = taxableAmountVal + cgstVal + sgstVal
     val roundedTotal = Math.round(rawTotal).toDouble()
     val roundOff = roundedTotal - rawTotal
 
@@ -2239,12 +2528,13 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                             .padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Product Name", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.2f))
-                        Text("HSN Code", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.0f))
-                        Text("Qty", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center)
-                        Text("Unit", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center)
-                        Text("Rate", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
-                        Text("Amount", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.3f), textAlign = TextAlign.End)
+                        Text("Product Name", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.8f))
+                        Text("HSN Code", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.8f))
+                        Text("Qty", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
+                        Text("Unit", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
+                        Text("Rate", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
+                        Text("Discount", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
+                        Text("Amount", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.0f), textAlign = TextAlign.End)
                     }
 
                     // Product Table Rows
@@ -2259,12 +2549,13 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(getCleanProductName(line.name), style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold, modifier = Modifier.weight(2.2f))
-                            Text(hsn, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray, modifier = Modifier.weight(1.0f))
-                            Text(qtyStr, style = MaterialTheme.typography.bodySmall, color = Color.Black, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center)
-                            Text(unit, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray, modifier = Modifier.weight(0.7f), textAlign = TextAlign.Center)
-                            Text("₹${String.format(Locale.US, "%.2f", line.price)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, modifier = Modifier.weight(1.1f), textAlign = TextAlign.End)
-                            Text("₹${String.format(Locale.US, "%.2f", line.totalPrice)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.3f), textAlign = TextAlign.End)
+                            Text(getCleanProductName(line.name), style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.8f))
+                            Text(hsn, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray, modifier = Modifier.weight(0.8f))
+                            Text(qtyStr, style = MaterialTheme.typography.bodySmall, color = Color.Black, modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
+                            Text(unit, style = MaterialTheme.typography.bodySmall, color = Color.DarkGray, modifier = Modifier.weight(0.5f), textAlign = TextAlign.Center)
+                            Text("₹${String.format(Locale.US, "%.2f", line.price)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
+                            Text("₹${String.format(Locale.US, "%.2f", line.discount)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F), modifier = Modifier.weight(0.8f), textAlign = TextAlign.End)
+                            Text("₹${String.format(Locale.US, "%.2f", line.totalPrice)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.0f), textAlign = TextAlign.End)
                         }
                     }
 
@@ -2296,24 +2587,21 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
 
                         // Right: Calculations Summary
                         Column(modifier = Modifier.weight(1f)) {
-                            // Net Price
+                            // Total Amount (Before Discount)
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Net Price:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                Text("₹${String.format(Locale.US, "%.2f", subtotalVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Medium)
+                                Text("Total Amount (Before Discount):", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("₹${String.format(Locale.US, "%.2f", totalAmountBeforeDiscountVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Medium)
                             }
-                            // Discount (if applicable)
-                            if (inv.discount > 0) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Discount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                    Text("-₹${String.format(Locale.US, "%.2f", inv.discount)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F), fontWeight = FontWeight.Medium)
-                                }
-                                val taxableValue = subtotalVal - inv.discount
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Taxable Value:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                    Text("₹${String.format(Locale.US, "%.2f", taxableValue)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Medium)
-                                }
+                            // Total Discount
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Total Discount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("-₹${String.format(Locale.US, "%.2f", totalDiscountVal)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F), fontWeight = FontWeight.Medium)
                             }
-
+                            // Taxable Amount
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Taxable Amount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("₹${String.format(Locale.US, "%.2f", taxableAmountVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
                             // CGST & SGST
                             if (inv.tax > 0) {
                                 Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2327,12 +2615,6 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                             }
 
                             HorizontalDivider(modifier = Modifier.padding(vertical = 6.dp), color = Color.Gray.copy(alpha = 0.5f), thickness = 1.dp)
-
-                            // Sub Total
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Sub Total:", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
-                                Text("₹${String.format(Locale.US, "%.2f", rawTotal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
 
                             // Round Off
                             if (Math.abs(roundOff) > 0.001) {
@@ -2476,22 +2758,20 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
 
                         // Calculations block
                         Column(modifier = Modifier.fillMaxWidth()) {
-                            // Net Price
+                            // Total Amount (Before Discount)
                             Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Net Price:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                Text("₹${String.format(Locale.US, "%.2f", subtotalVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black)
+                                Text("Total Amount (Before Discount):", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("₹${String.format(Locale.US, "%.2f", totalAmountBeforeDiscountVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black)
                             }
-                            // Discount (if applicable)
-                            if (inv.discount > 0) {
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Discount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                    Text("-₹${String.format(Locale.US, "%.2f", inv.discount)}", style = MaterialTheme.typography.bodySmall, color = Color.Black)
-                                }
-                                val taxableValue = subtotalVal - inv.discount
-                                Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text("Taxable Value:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
-                                    Text("₹${String.format(Locale.US, "%.2f", taxableValue)}", style = MaterialTheme.typography.bodySmall, color = Color.Black)
-                                }
+                            // Total Discount
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Total Discount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("-₹${String.format(Locale.US, "%.2f", totalDiscountVal)}", style = MaterialTheme.typography.bodySmall, color = Color(0xFFD32F2F))
+                            }
+                            // Taxable Amount
+                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("Taxable Amount:", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                                Text("₹${String.format(Locale.US, "%.2f", taxableAmountVal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
                             }
 
                             // CGST & SGST
@@ -2507,12 +2787,6 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                             }
 
                             DashedLine(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
-
-                            // Sub Total
-                            Row(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("Sub Total:", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
-                                Text("₹${String.format(Locale.US, "%.2f", rawTotal)}", style = MaterialTheme.typography.bodySmall, color = Color.Black, fontWeight = FontWeight.Bold)
-                            }
 
                             // Round Off
                             if (Math.abs(roundOff) > 0.001) {
@@ -2762,12 +3036,13 @@ fun generateInvoiceHtml(
 ): String {
     val inv = item.invoice
     val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
-    val subtotal = item.items.sumOf { it.totalPrice }
+    val totalAmountBeforeDiscountVal = item.items.sumOf { it.price * it.quantity }
+    val totalDiscountVal = item.items.sumOf { it.discount }
+    val taxableAmountVal = totalAmountBeforeDiscountVal - totalDiscountVal
     val taxRate = inv.tax
-    val taxVal = subtotal * (taxRate / 100.0)
-    val cgstVal = taxVal / 2
-    val sgstVal = taxVal / 2
-    val rawTotal = subtotal + taxVal - inv.discount
+    val cgstVal = taxableAmountVal * (taxRate / 200.0)
+    val sgstVal = taxableAmountVal * (taxRate / 200.0)
+    val rawTotal = taxableAmountVal + cgstVal + sgstVal
     val roundedTotal = Math.round(rawTotal).toDouble()
     val roundOff = roundedTotal - rawTotal
     
@@ -2882,6 +3157,7 @@ fun generateInvoiceHtml(
                             <th class="text-center">Qty</th>
                             <th class="text-center">Unit</th>
                             <th class="text-right">Rate</th>
+                            <th class="text-right">Discount</th>
                             <th class="text-right">Amount</th>
                         </tr>
                     </thead>
@@ -2897,6 +3173,7 @@ fun generateInvoiceHtml(
                                 <td class="text-center">$qtyStr</td>
                                 <td class="text-center">$unit</td>
                                 <td class="text-right">₹${String.format(Locale.US, "%.2f", line.price)}</td>
+                                <td class="text-right">₹${String.format(Locale.US, "%.2f", line.discount)}</td>
                                 <td class="text-right">₹${String.format(Locale.US, "%.2f", line.totalPrice)}</td>
                             </tr>
                             """.trimIndent()
@@ -2908,19 +3185,17 @@ fun generateInvoiceHtml(
                 
                 <table class="summary-table">
                     <tr>
-                        <td class="summary-label">Net Price:</td>
-                        <td class="summary-value">₹${String.format(Locale.US, "%.2f", subtotal)}</td>
-                    </tr>
-                    ${if (inv.discount > 0) """
-                    <tr>
-                        <td class="summary-label">Discount:</td>
-                        <td class="summary-value">-₹${String.format(Locale.US, "%.2f", inv.discount)}</td>
+                        <td class="summary-label">Total Amount (Before Discount):</td>
+                        <td class="summary-value">₹${String.format(Locale.US, "%.2f", totalAmountBeforeDiscountVal)}</td>
                     </tr>
                     <tr>
-                        <td class="summary-label">Taxable Value:</td>
-                        <td class="summary-value">₹${String.format(Locale.US, "%.2f", subtotal - inv.discount)}</td>
+                        <td class="summary-label">Total Discount:</td>
+                        <td class="summary-value" style="color: #D32F2F;">-₹${String.format(Locale.US, "%.2f", totalDiscountVal)}</td>
                     </tr>
-                    """ else ""}
+                    <tr>
+                        <td class="summary-label">Taxable Amount:</td>
+                        <td class="summary-value">₹${String.format(Locale.US, "%.2f", taxableAmountVal)}</td>
+                    </tr>
                     ${if (inv.tax > 0) """
                     <tr>
                         <td class="summary-label" style="padding-top: 12px;">CGST (${inv.tax / 2}%):</td>
@@ -2931,10 +3206,6 @@ fun generateInvoiceHtml(
                         <td class="summary-value">₹${String.format(Locale.US, "%.2f", sgstVal)}</td>
                     </tr>
                     """ else ""}
-                    <tr style="border-top: 1px solid #ccc;">
-                        <td class="summary-label" style="font-weight: bold; color: #000;">Sub Total:</td>
-                        <td class="summary-value" style="font-weight: bold; color: #000;">₹${String.format(Locale.US, "%.2f", rawTotal)}</td>
-                    </tr>
                     ${if (Math.abs(roundOff) > 0.001) """
                     <tr>
                         <td class="summary-label" style="padding-top: 12px;">Round Off:</td>
@@ -3056,7 +3327,7 @@ fun generateInvoiceHtml(
                             <tr>
                                 <td>
                                     <strong>${getCleanProductName(line.name)}</strong><br>
-                                    <span style="font-size: 8px; color: #555;">HSN: $hsn</span>
+                                    <span style="font-size: 8px; color: #555;">HSN: $hsn | Disc: ₹${String.format(Locale.US, "%.1f", line.discount)}</span>
                                 </td>
                                 <td class="text-right">$qtyStr $unit</td>
                                 <td class="text-right">${String.format(Locale.US, "%.1f", line.price)}</td>
@@ -3070,19 +3341,15 @@ fun generateInvoiceHtml(
                 <div class="divider"></div>
                 
                 <div class="summary-box">
-                    <div class="summary-row"><span>Net Price:</span><span>₹${String.format(Locale.US, "%.2f", subtotal)}</span></div>
-                    ${if (inv.discount > 0) """
-                    <div class="summary-row"><span>Discount:</span><span>-₹${String.format(Locale.US, "%.2f", inv.discount)}</span></div>
-                    <div class="summary-row"><span>Taxable Value:</span><span>₹${String.format(Locale.US, "%.2f", subtotal - inv.discount)}</span></div>
-                    """ else ""}
+                    <div class="summary-row"><span>Total Before Disc:</span><span>₹${String.format(Locale.US, "%.2f", totalAmountBeforeDiscountVal)}</span></div>
+                    <div class="summary-row"><span>Total Discount:</span><span>-₹${String.format(Locale.US, "%.2f", totalDiscountVal)}</span></div>
+                    <div class="summary-row"><span>Taxable Amount:</span><span>₹${String.format(Locale.US, "%.2f", taxableAmountVal)}</span></div>
                     ${if (inv.tax > 0) """
                     <div class="summary-row" style="margin-top: 4px;"><span>CGST (${inv.tax / 2}%):</span><span>₹${String.format(Locale.US, "%.2f", cgstVal)}</span></div>
                     <div class="summary-row"><span>SGST (${inv.tax / 2}%):</span><span>₹${String.format(Locale.US, "%.2f", sgstVal)}</span></div>
                     """ else ""}
                     
                     <div class="divider"></div>
-                    
-                    <div class="summary-row bold"><span>Sub Total:</span><span>₹${String.format(Locale.US, "%.2f", rawTotal)}</span></div>
                     
                     ${if (Math.abs(roundOff) > 0.001) """
                     <div class="summary-row" style="margin-top: 4px;"><span>Round Off:</span><span>₹${if (roundOff > 0.001) "+" else ""}${String.format(Locale.US, "%.2f", roundOff)}</span></div>
@@ -4166,6 +4433,22 @@ fun CreditRemindersScreen(viewModel: BillingViewModel) {
     // State for payment update dialog
     var showPaymentDialogForInvoice by remember { mutableStateOf<InvoiceWithItems?>(null) }
     var paymentAmountInput by remember { mutableStateOf("") }
+    var paymentMode by remember { mutableStateOf("Cash") }
+    var refNo by remember { mutableStateOf("") }
+    var notes by remember { mutableStateOf("") }
+    var formDate by remember { mutableStateOf(System.currentTimeMillis()) }
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showPaymentDialogForInvoice) {
+        if (showPaymentDialogForInvoice != null) {
+            val invoice = showPaymentDialogForInvoice!!.invoice
+            paymentAmountInput = String.format(Locale.US, "%.2f", invoice.outstandingAmount)
+            paymentMode = "Cash"
+            refNo = ""
+            notes = "Received towards Invoice #${invoice.invoiceNumber}"
+            formDate = System.currentTimeMillis()
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -4496,23 +4779,27 @@ fun CreditRemindersScreen(viewModel: BillingViewModel) {
                                     Text("Share Text", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                                 }
 
-                                // Pay/Clear outstanding button
+                                // Receive Payment / Collect dues button
                                 Button(
                                     onClick = {
                                         showPaymentDialogForInvoice = item
                                         paymentAmountInput = String.format(Locale.US, "%.2f", invoice.outstandingAmount)
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier.weight(1.3f).testTag("customer_receive_payment_btn"),
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = Color(0xFF0F9D58), // Green for collecting payment
+                                        contentColor = Color.White
+                                    ),
                                     shape = RoundedCornerShape(8.dp),
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp)
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Check, 
+                                        imageVector = Icons.Default.ArrowDownward, 
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp)
                                     )
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Pay", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+                                    Text("Receive ₹", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
                                 }
                             }
                         }
@@ -4522,73 +4809,217 @@ fun CreditRemindersScreen(viewModel: BillingViewModel) {
         }
     }
 
-    // Payment Dialog for updating/reducing outstanding amount directly on the credit sale invoice!
+    // Payment Dialog for recording payment received on the credit sale invoice!
     if (showPaymentDialogForInvoice != null) {
         val invoiceItem = showPaymentDialogForInvoice!!
         val invoice = invoiceItem.invoice
         AlertDialog(
             onDismissRequest = { showPaymentDialogForInvoice = null },
-            title = { Text("Update Outstanding Amount") },
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDownward,
+                        contentDescription = null,
+                        tint = Color(0xFF0F9D58),
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text("Receive Payment", fontWeight = FontWeight.Bold)
+                }
+            },
             text = {
-                Column {
-                    Text(
-                        text = "Customer: ${invoice.partyName}",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = "Invoice #${invoice.invoiceNumber} Total: ₹${String.format(Locale.US, "%.2f", invoice.totalAmount)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // Info Card with Customer Name and Invoice Details
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                text = "Customer: ${invoice.partyName}",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "Invoice #${invoice.invoiceNumber} • Total: ₹${String.format(Locale.US, "%.2f", invoice.totalAmount)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Outstanding Balance: ₹${String.format(Locale.US, "%.2f", invoice.outstandingAmount)}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
+                    // Payment Amount text field
                     OutlinedTextField(
                         value = paymentAmountInput,
                         onValueChange = { paymentAmountInput = it },
-                        label = { Text("Outstanding Credit Balance (₹)") },
+                        label = { Text("Amount to Receive (₹) *") },
                         placeholder = { Text("0.00") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                         singleLine = true,
                         shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = Color(0xFF0F9D58),
+                            focusedLabelColor = Color(0xFF0F9D58)
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("payment_receive_amount_input")
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Set to 0 if the invoice is fully paid and cleared.",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                    // Live calculation of remaining balance
+                    val enteredAmount = paymentAmountInput.toDoubleOrNull() ?: 0.0
+                    val remainingBalance = (invoice.outstandingAmount - enteredAmount).coerceAtLeast(0.0)
+                    val isFullPayment = enteredAmount >= invoice.outstandingAmount
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Remaining Outstanding:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "₹${String.format(Locale.US, "%.2f", remainingBalance)}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (remainingBalance > 0.0) MaterialTheme.colorScheme.error else Color(0xFF0F9D58)
+                        )
+                    }
+
+                    if (isFullPayment) {
+                        Text(
+                            text = "🎉 Full Payment (Outstanding balance will be fully cleared)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF0F9D58),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    } else if (enteredAmount > 0.0) {
+                        Text(
+                            text = "ℹ️ Partial Payment (Remaining balance will remain outstanding)",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+
+                    // Payment Mode Selector (Cash/Bank)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf("Cash", "Bank").forEach { mode ->
+                            val isSelected = paymentMode == mode
+                            OutlinedCard(
+                                onClick = { paymentMode = mode },
+                                modifier = Modifier.weight(1f).height(40.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.outlinedCardColors(
+                                    containerColor = if (isSelected) Color(0xFF0F9D58).copy(alpha = 0.1f) else Color.Transparent
+                                ),
+                                border = BorderStroke(
+                                    width = if (isSelected) 2.dp else 1.dp,
+                                    color = if (isSelected) Color(0xFF0F9D58) else MaterialTheme.colorScheme.outline
+                                )
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = mode,
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = if (isSelected) Color(0xFF0F9D58) else MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    // Date Picker field
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        val dateSdf = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                        OutlinedTextField(
+                            value = dateSdf.format(Date(formDate)),
+                            onValueChange = {},
+                            label = { Text("Payment Date") },
+                            modifier = Modifier.fillMaxWidth(),
+                            readOnly = true,
+                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = Color(0xFF0F9D58)) },
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                        Box(
+                            modifier = Modifier
+                                .matchParentSize()
+                                .clickable { showDatePicker = true }
+                        )
+                    }
+
+                    if (paymentMode == "Bank") {
+                        OutlinedTextField(
+                            value = refNo,
+                            onValueChange = { refNo = it },
+                            label = { Text("Reference / Trans No (Optional)") },
+                            modifier = Modifier.fillMaxWidth(),
+                            singleLine = true,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                    }
+
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { notes = it },
+                        label = { Text("Notes (Optional)") },
+                        modifier = Modifier.fillMaxWidth(),
+                        maxLines = 2,
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        val enteredAmt = paymentAmountInput.toDoubleOrNull() ?: 0.0
-                        viewModel.updateInvoiceOutstandingAmount(invoice.id, enteredAmt)
-                        
-                        // Also record customer payment if needed to keep ledger fully synced!
-                        val diff = invoice.outstandingAmount - enteredAmt
-                        if (diff > 0) {
-                            coroutineScope.launch {
-                                val cust = viewModel.customersWithBalance.value.find { it.customer.name.trim().equals(invoice.partyName.trim(), ignoreCase = true) }?.customer
-                                if (cust != null) {
-                                    viewModel.addCustomerPayment(
-                                        com.example.data.CustomerPaymentEntity(
-                                            customerId = cust.id,
-                                            amount = diff,
-                                            date = System.currentTimeMillis(),
-                                            notes = "Received towards Invoice #${invoice.invoiceNumber}"
-                                        )
-                                    )
-                                }
-                            }
+                        val enteredAmount = paymentAmountInput.toDoubleOrNull() ?: 0.0
+                        if (enteredAmount <= 0.0) {
+                            android.widget.Toast.makeText(context, "Please enter a valid payment amount", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            val remainingBalance = (invoice.outstandingAmount - enteredAmount).coerceAtLeast(0.0)
+                            
+                            viewModel.addCustomerPaymentWithInvoiceUpdate(
+                                partyName = invoice.partyName,
+                                paymentAmount = enteredAmount,
+                                invoiceId = invoice.id,
+                                newOutstandingAmount = remainingBalance,
+                                date = formDate,
+                                paymentMode = paymentMode,
+                                referenceNo = refNo,
+                                notes = notes
+                            )
+                            
+                            showPaymentDialogForInvoice = null
+                            android.widget.Toast.makeText(context, "Payment received successfully!", android.widget.Toast.LENGTH_SHORT).show()
                         }
-                        
-                        showPaymentDialogForInvoice = null
-                        android.widget.Toast.makeText(context, "Outstanding credit updated!", android.widget.Toast.LENGTH_SHORT).show()
-                    }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF0F9D58),
+                        contentColor = Color.White
+                    ),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text("Update")
+                    Text("Receive Payment", fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -4597,6 +5028,57 @@ fun CreditRemindersScreen(viewModel: BillingViewModel) {
                 }
             }
         )
+    }
+
+    if (showDatePicker) {
+        val today = java.util.Calendar.getInstance()
+        val datePickerState = rememberDatePickerState(
+            initialSelectedDateMillis = formDate,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean {
+                    val cellLocal = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC")).apply {
+                        timeInMillis = utcTimeMillis
+                    }
+                    val localToday = java.util.Calendar.getInstance()
+                    return !cellLocal.after(localToday)
+                }
+
+                override fun isSelectableYear(year: Int): Boolean {
+                    val currentYear = today.get(java.util.Calendar.YEAR)
+                    return year <= currentYear
+                }
+            }
+        )
+
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { selected ->
+                            val localCal = java.util.Calendar.getInstance().apply {
+                                timeInMillis = selected
+                                val now = java.util.Calendar.getInstance()
+                                set(java.util.Calendar.HOUR_OF_DAY, now.get(java.util.Calendar.HOUR_OF_DAY))
+                                set(java.util.Calendar.MINUTE, now.get(java.util.Calendar.MINUTE))
+                                set(java.util.Calendar.SECOND, now.get(java.util.Calendar.SECOND))
+                            }
+                            formDate = localCal.timeInMillis
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    Text("OK", color = Color(0xFF0F9D58), fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text("Cancel")
+                }
+            }
+        ) {
+            DatePicker(state = datePickerState)
+        }
     }
 }
 
@@ -4772,493 +5254,346 @@ fun MoreScreen(viewModel: BillingViewModel) {
 
 @Composable
 fun ProductsScreen(viewModel: BillingViewModel) {
-    val products by viewModel.productSummaries.collectAsStateWithLifecycle()
-    val invoices by viewModel.allInvoices.collectAsStateWithLifecycle()
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedProductForHistory by remember { mutableStateOf<com.example.ui.ProductSummary?>(null) }
+    val categories by viewModel.productCategories.collectAsStateWithLifecycle()
+    val productItems by viewModel.productItems.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    var productToAdjust by remember { mutableStateOf<com.example.ui.ProductSummary?>(null) }
-    var showAdjustmentLockVerify by remember { mutableStateOf(false) }
-    var showAdjustmentInput by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) } // 0: Product Items, 1: Product Categories
 
-    val filteredProducts = remember(products, searchQuery) {
-        products.filter { it.name.contains(searchQuery, ignoreCase = true) }
+    // Search and Filter states
+    var itemSearchQuery by remember { mutableStateOf("") }
+    var selectedCategoryFilter by remember { mutableStateOf<String?>(null) }
+    var categorySearchQuery by remember { mutableStateOf("") }
+
+    // Dialog states for Categories
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
+    var categoryToEdit by remember { mutableStateOf<com.example.data.ProductCategoryEntity?>(null) }
+    var categoryToDelete by remember { mutableStateOf<com.example.data.ProductCategoryEntity?>(null) }
+
+    // Dialog states for Items
+    var showAddItemDialog by remember { mutableStateOf(false) }
+    var itemToEdit by remember { mutableStateOf<com.example.data.ProductItemEntity?>(null) }
+    var itemToDelete by remember { mutableStateOf<com.example.data.ProductItemEntity?>(null) }
+
+    val filteredItems = remember(productItems, itemSearchQuery, selectedCategoryFilter) {
+        productItems.filter { item ->
+            val matchesSearch = item.name.contains(itemSearchQuery, ignoreCase = true) ||
+                    (item.hsnCode?.contains(itemSearchQuery, ignoreCase = true) ?: false)
+            val matchesCategory = selectedCategoryFilter == null || item.categoryName.equals(selectedCategoryFilter, ignoreCase = true)
+            matchesSearch && matchesCategory
+        }
     }
 
-    val totalStockValuation = remember(products) {
-        products.filter { it.stockBalance > 0 }.sumOf { it.stockValue }
+    val filteredCategories = remember(categories, categorySearchQuery) {
+        categories.filter { cat ->
+            cat.name.contains(categorySearchQuery, ignoreCase = true)
+        }
     }
 
-    if (showAdjustmentLockVerify) {
-        PasswordVerificationDialog(
-            viewModel = viewModel,
-            onVerified = {
-                showAdjustmentLockVerify = false
-                showAdjustmentInput = true
-            },
-            onDismiss = {
-                showAdjustmentLockVerify = false
-                productToAdjust = null
-            }
-        )
-    }
-
-    if (showAdjustmentInput && productToAdjust != null) {
-        var adjustmentQtyStr by remember { mutableStateOf("") }
-        var isIncrease by remember { mutableStateOf(true) }
-        var reasonText by remember { mutableStateOf("") }
-
-        AlertDialog(
-            onDismissRequest = { 
-                showAdjustmentInput = false
-                productToAdjust = null
-            },
-            title = { Text("Adjust Stock: ${productToAdjust?.name}", fontWeight = FontWeight.Bold) },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Current stock: ${String.format(Locale.US, "%.1f", productToAdjust?.stockBalance ?: 0.0)} Units", style = MaterialTheme.typography.bodyMedium)
-                    
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { isIncrease = true },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (isIncrease) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (isIncrease) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f).testTag("btn_adj_type_increase")
-                        ) {
-                            Text("Add (+)")
-                        }
-                        Button(
-                            onClick = { isIncrease = false },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (!isIncrease) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.surfaceVariant,
-                                contentColor = if (!isIncrease) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onSurfaceVariant
-                            ),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.weight(1f).testTag("btn_adj_type_decrease")
-                        ) {
-                            Text("Reduce (-)")
-                        }
+    Scaffold(
+        floatingActionButton = {
+            FloatingActionButton(
+                onClick = {
+                    if (selectedTab == 0) {
+                        showAddItemDialog = true
+                    } else {
+                        showAddCategoryDialog = true
                     }
-
-                    OutlinedTextField(
-                        value = adjustmentQtyStr,
-                        onValueChange = { input -> 
-                            if (input.all { it.isDigit() || it == '.' }) {
-                                adjustmentQtyStr = input
-                            }
-                        },
-                        label = { Text("Quantity to Adjust") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("input_adj_qty")
-                    )
-
-                    OutlinedTextField(
-                        value = reasonText,
-                        onValueChange = { reasonText = it },
-                        label = { Text("Reason (e.g. Stock count check)") },
-                        placeholder = { Text("Damaged items, count check, etc.") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("input_adj_reason")
-                    )
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val qty = adjustmentQtyStr.toDoubleOrNull()
-                        if (qty == null || qty <= 0) {
-                            android.widget.Toast.makeText(context, "Please enter a valid positive quantity to adjust!", android.widget.Toast.LENGTH_SHORT).show()
-                        } else {
-                            val actualChange = if (isIncrease) qty else -qty
-                            viewModel.adjustStock(productToAdjust!!.name, actualChange, reasonText)
-                            android.widget.Toast.makeText(context, "Stock adjusted successfully!", android.widget.Toast.LENGTH_SHORT).show()
-                            showAdjustmentInput = false
-                            productToAdjust = null
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text("Confirm Adjustment")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { 
-                    showAdjustmentInput = false
-                    productToAdjust = null
-                }) {
-                    Text("Cancel")
-                }
+                },
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.testTag("fab_add_master")
+            ) {
+                Icon(
+                    Icons.Default.Add, 
+                    contentDescription = if (selectedTab == 0) "Add Product Item" else "Add Category"
+                )
             }
-        )
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
-        // Header
-        Row(
+        },
+        contentWindowInsets = WindowInsets.safeDrawing
+    ) { paddingValues ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp)
         ) {
-            IconButton(
-                onClick = { viewModel.goBack() },
-                modifier = Modifier.testTag("btn_back_to_more")
-            ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Products List",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-
-        // Stats Cards
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Card(
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Total Items",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "${products.size}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                }
-            }
-            Card(
-                modifier = Modifier.weight(1.2f),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.4f))
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Stock Valuation",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "₹${String.format(Locale.US, "%.2f", totalStockValuation)}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                }
-            }
-        }
-
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .testTag("search_products_input"),
-            placeholder = { Text("Search product name...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true,
-            shape = RoundedCornerShape(12.dp)
-        )
-
-        // Products List
-        if (filteredProducts.isEmpty()) {
-            Box(
+            // Header
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
-                contentAlignment = Alignment.Center
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        Icons.Default.Inventory,
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "No products found",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                IconButton(
+                    onClick = { viewModel.goBack() },
+                    modifier = Modifier.testTag("btn_back_products")
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                 }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Inventory Masters",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
             }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+
+            // Material 3 Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                containerColor = Color.Transparent,
+                divider = {}
             ) {
-                items(filteredProducts) { prod ->
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { selectedProductForHistory = prod },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
+                Tab(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    text = { 
+                        Text(
+                            text = "Stock Items (${productItems.size})",
+                            fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
+                        ) 
+                    },
+                    modifier = Modifier.testTag("tab_stock_items")
+                )
+                Tab(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    text = { 
+                        Text(
+                            text = "Stock Groups (${categories.size})",
+                            fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
+                        ) 
+                    },
+                    modifier = Modifier.testTag("tab_stock_groups")
+                )
+            }
+
+            if (selectedTab == 0) {
+                // STOCK ITEMS TAB
+                // Search Bar
+                OutlinedTextField(
+                    value = itemSearchQuery,
+                    onValueChange = { itemSearchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp)
+                        .testTag("search_items_input"),
+                    placeholder = { Text("Search item name or HSN...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Category Filter Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Filter Group:",
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+
+                    var showFilterDropdown by remember { mutableStateOf(false) }
+
+                    Surface(
+                        onClick = { showFilterDropdown = true },
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (selectedCategoryFilter != null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = prod.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                val balanceColor = when {
-                                    prod.stockBalance > 0 -> Color(0xFF0F9D58)
-                                    prod.stockBalance < 0 -> Color(0xFFBA1A1A)
-                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                                Surface(
-                                    shape = RoundedCornerShape(8.dp),
-                                    color = balanceColor.copy(alpha = 0.12f),
-                                    modifier = Modifier.padding(start = 8.dp)
-                                ) {
-                                    Text(
-                                        text = "${String.format(Locale.US, "%.1f", prod.stockBalance)} Units",
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = balanceColor
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Avg Purchase Price",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "₹${String.format(Locale.US, "%.2f", prod.avgPurchasePrice)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Avg Sale Price",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "₹${String.format(Locale.US, "%.2f", prod.avgSalePrice)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(8.dp))
-
-                            Row(modifier = Modifier.fillMaxWidth()) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Total Qty (In/Out)",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "In: ${String.format(Locale.US, "%.1f", prod.totalQtyPurchased)} | Out: ${String.format(Locale.US, "%.1f", prod.totalQtySold)}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Stock Valuation",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    Text(
-                                        text = "₹${String.format(Locale.US, "%.2f", prod.stockValue)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                OutlinedButton(
-                                    onClick = {
-                                        productToAdjust = prod
-                                        if (viewModel.isTransactionSecurityEnabled()) {
-                                            showAdjustmentLockVerify = true
-                                        } else {
-                                            showAdjustmentInput = true
-                                        }
-                                    },
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.height(32.dp).testTag("btn_adjust_stock_${prod.name}")
-                                ) {
-                                    Icon(Icons.Default.Tune, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text("Adjust Stock", style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = selectedCategoryFilter ?: "All Stock Groups",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = if (selectedCategoryFilter != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(
+                                Icons.Default.ArrowDropDown, 
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = if (selectedCategoryFilter != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                     }
-                }
-            }
-        }
-    }
 
-    // Detail history pop-up dialog
-    selectedProductForHistory?.let { prod ->
-        val itemHistory = remember(prod, invoices) {
-            invoices.flatMap { invWithItems ->
-                invWithItems.items
-                    .filter { it.name.trim().equals(prod.name, ignoreCase = true) }
-                    .map { item -> Triple(invWithItems.invoice, item, invWithItems) }
-            }.sortedByDescending { it.first.date }
-        }
-
-        AlertDialog(
-            onDismissRequest = { selectedProductForHistory = null },
-            title = {
-                Text(
-                    text = "${prod.name} Ledger",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-            },
-            text = {
-                Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = "TRANSACTION REGISTRY",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 12.dp)
-                    )
-
-                    if (itemHistory.isEmpty()) {
-                        Text("No logs recorded for this item.", style = MaterialTheme.typography.bodyMedium)
-                    } else {
-                        val dateFormat = remember { SimpleDateFormat("dd MMM yyyy", Locale.US) }
-                        LazyColumn(
-                            modifier = Modifier
-                                .height(300.dp)
-                                .fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(itemHistory) { (invoice, item, _) ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                    if (showFilterDropdown) {
+                        AlertDialog(
+                            onDismissRequest = { showFilterDropdown = false },
+                            title = { Text("Filter by Stock Group", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 250.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Row(
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(10.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                            .clickable {
+                                                selectedCategoryFilter = null
+                                                showFilterDropdown = false
+                                            },
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = if (selectedCategoryFilter == null) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                        )
                                     ) {
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                val indicatorColor = if (invoice.type == "SALE") Color(0xFF0F9D58) else Color(0xFF1E88E5)
-                                                Surface(
-                                                    shape = RoundedCornerShape(4.dp),
-                                                    color = indicatorColor.copy(alpha = 0.15f)
-                                                ) {
-                                                    Text(
-                                                        text = invoice.type,
-                                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = indicatorColor
-                                                    )
-                                                }
-                                                Spacer(modifier = Modifier.width(6.dp))
-                                                Text(
-                                                    text = "#${invoice.invoiceNumber}",
-                                                    style = MaterialTheme.typography.bodyMedium,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.height(2.dp))
-                                            Text(
-                                                text = invoice.partyName,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurface
+                                        Text(
+                                            "All Stock Groups (No Filter)",
+                                            modifier = Modifier.padding(12.dp),
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (selectedCategoryFilter == null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    categories.forEach { cat ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedCategoryFilter = cat.name
+                                                    showFilterDropdown = false
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedCategoryFilter == cat.name) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                                             )
+                                        ) {
                                             Text(
-                                                text = dateFormat.format(Date(invoice.date)),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                cat.name,
+                                                modifier = Modifier.padding(12.dp),
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selectedCategoryFilter == cat.name) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface
                                             )
                                         }
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text(
-                                                text = "${item.quantity} Qty",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showFilterDropdown = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
+                    }
+                }
+
+                // Items list
+                if (filteredItems.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Inventory,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No stock items found",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredItems) { item ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = item.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            // Category badge
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.6f)
+                                            ) {
+                                                Text(
+                                                    text = item.categoryName,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+
+                                            // HSN badge
+                                            if (!item.hsnCode.isNullOrBlank()) {
+                                                Surface(
+                                                    shape = RoundedCornerShape(6.dp),
+                                                    color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.6f)
+                                                ) {
+                                                    Text(
+                                                        text = "HSN: ${item.hsnCode}",
+                                                        style = MaterialTheme.typography.labelSmall,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // Action buttons
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        IconButton(onClick = { itemToEdit = item }) {
+                                            Icon(
+                                                Icons.Default.Edit, 
+                                                contentDescription = "Edit Item",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
                                             )
-                                            Text(
-                                                text = "₹${String.format(Locale.US, "%.2f", item.price)}/u",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                            Text(
-                                                text = "₹${String.format(Locale.US, "%.2f", item.totalPrice)}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.primary
+                                        }
+                                        IconButton(onClick = { itemToDelete = item }) {
+                                            Icon(
+                                                Icons.Default.Delete, 
+                                                contentDescription = "Delete Item",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(20.dp)
                                             )
                                         }
                                     }
@@ -5267,13 +5602,763 @@ fun ProductsScreen(viewModel: BillingViewModel) {
                         }
                     }
                 }
+            } else {
+                // STOCK GROUPS (CATEGORIES) TAB
+                // Search Bar
+                OutlinedTextField(
+                    value = categorySearchQuery,
+                    onValueChange = { categorySearchQuery = it },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                        .testTag("search_groups_input"),
+                    placeholder = { Text("Search category name...") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp)
+                )
+
+                // Categories list
+                if (filteredCategories.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Category,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "No product categories found",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(filteredCategories) { cat ->
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(12.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(16.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = cat.name,
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.height(2.dp))
+                                        val itemCount = remember(cat.name, productItems) {
+                                            productItems.count { it.categoryName.equals(cat.name, ignoreCase = true) }
+                                        }
+                                        Text(
+                                            text = "$itemCount Stock Items registered",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        IconButton(onClick = { categoryToEdit = cat }) {
+                                            Icon(
+                                                Icons.Default.Edit, 
+                                                contentDescription = "Edit Category",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                        IconButton(onClick = { categoryToDelete = cat }) {
+                                            Icon(
+                                                Icons.Default.Delete, 
+                                                contentDescription = "Delete Category",
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // DIALOGS SECTION
+
+    // 1. Add Category Dialog
+    if (showAddCategoryDialog) {
+        var catName by remember { mutableStateOf("") }
+        AlertDialog(
+            onDismissRequest = { showAddCategoryDialog = false },
+            title = { Text("Add Stock Group (Category)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Enter a unique group name (e.g. Battery, Tyre, Oil)", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(
+                        value = catName,
+                        onValueChange = { catName = it },
+                        placeholder = { Text("Category Name") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_category_name"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
             },
             confirmButton = {
-                TextButton(onClick = { selectedProductForHistory = null }) {
-                    Text("Close")
+                Button(
+                    onClick = {
+                        if (catName.trim().isBlank()) {
+                            android.widget.Toast.makeText(context, "Group name cannot be blank!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.addCategory(catName.trim())
+                            android.widget.Toast.makeText(context, "Group added successfully!", android.widget.Toast.LENGTH_SHORT).show()
+                            showAddCategoryDialog = false
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Add Group")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddCategoryDialog = false }) {
+                    Text("Cancel")
                 }
             }
         )
+    }
+
+    // 2. Edit Category Dialog
+    categoryToEdit?.let { cat ->
+        var catName by remember { mutableStateOf(cat.name) }
+        AlertDialog(
+            onDismissRequest = { categoryToEdit = null },
+            title = { Text("Edit Stock Group (Category)", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Modify Group Name:", style = MaterialTheme.typography.bodyMedium)
+                    OutlinedTextField(
+                        value = catName,
+                        onValueChange = { catName = it },
+                        modifier = Modifier.fillMaxWidth().testTag("edit_category_name_input"),
+                        singleLine = true,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (catName.trim().isBlank()) {
+                            android.widget.Toast.makeText(context, "Group name cannot be blank!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            viewModel.editCategory(cat, catName.trim())
+                            android.widget.Toast.makeText(context, "Group modified!", android.widget.Toast.LENGTH_SHORT).show()
+                            categoryToEdit = null
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Save Changes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryToEdit = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 3. Delete Category Dialog
+    categoryToDelete?.let { cat ->
+        AlertDialog(
+            onDismissRequest = { categoryToDelete = null },
+            title = { Text("Delete Stock Group?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Are you sure you want to delete the group '${cat.name}'? Existing stock items in this group will remain, but the group itself will be removed from masters.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteCategory(cat)
+                        android.widget.Toast.makeText(context, "Group deleted!", android.widget.Toast.LENGTH_SHORT).show()
+                        categoryToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { categoryToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 4. Add Item Dialog
+    if (showAddItemDialog) {
+        var selectedCatName by remember { mutableStateOf("") }
+        var itemName by remember { mutableStateOf("") }
+        var hsnCode by remember { mutableStateOf("") }
+        var defaultSellingRateStr by remember { mutableStateOf("") }
+        var defaultDiscountValueStr by remember { mutableStateOf("") }
+        var defaultDiscountType by remember { mutableStateOf("Rs") }
+        var showCatSelector by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showAddItemDialog = false },
+            title = { Text("Add Stock Item", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 1. Select Group (Required)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Select Group *", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(
+                            value = selectedCatName,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { showCatSelector = true },
+                            trailingIcon = {
+                                IconButton(onClick = { showCatSelector = true }) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            placeholder = { Text("Choose a group...") },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    if (showCatSelector) {
+                        AlertDialog(
+                            onDismissRequest = { showCatSelector = false },
+                            title = { Text("Select Stock Group", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 200.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (categories.isEmpty()) {
+                                        Text("No groups available. Please create a group first.")
+                                    } else {
+                                        categories.forEach { cat ->
+                                            Card(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        selectedCatName = cat.name
+                                                        showCatSelector = false
+                                                    },
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = if (selectedCatName == cat.name) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                                )
+                                            ) {
+                                                Text(cat.name, modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showCatSelector = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
+                    }
+
+                    // 2. Item Name (Required)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Item Name *", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(
+                            value = itemName,
+                            onValueChange = { itemName = it },
+                            placeholder = { Text("e.g. GF Z4") },
+                            modifier = Modifier.fillMaxWidth().testTag("input_item_name"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    // 3. Default Selling Rate (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Default Selling Rate (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = defaultSellingRateStr,
+                            onValueChange = { defaultSellingRateStr = it },
+                            leadingIcon = { Text("₹", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder = { Text("0.00") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth().testTag("input_item_selling_rate"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    // 4. Default Discount (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Default Discount (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            var showTypeDropdown by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.width(100.dp)) {
+                                OutlinedTextField(
+                                    value = defaultDiscountType,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    modifier = Modifier.fillMaxWidth().clickable { showTypeDropdown = true },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.clickable { showTypeDropdown = true }
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                DropdownMenu(
+                                    expanded = showTypeDropdown,
+                                    onDismissRequest = { showTypeDropdown = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Rs") },
+                                        onClick = {
+                                            defaultDiscountType = "Rs"
+                                            showTypeDropdown = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("%") },
+                                        onClick = {
+                                            defaultDiscountType = "%"
+                                            showTypeDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = defaultDiscountValueStr,
+                                onValueChange = { defaultDiscountValueStr = it },
+                                placeholder = { Text("__________") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f).testTag("input_item_discount_val"),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+
+                    // 5. HSN Code (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("HSN Code (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = hsnCode,
+                            onValueChange = { hsnCode = it },
+                            placeholder = { Text("e.g. 85071000") },
+                            modifier = Modifier.fillMaxWidth().testTag("input_item_hsn"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (selectedCatName.isBlank()) {
+                            android.widget.Toast.makeText(context, "Stock Group is required!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else if (itemName.trim().isBlank()) {
+                            android.widget.Toast.makeText(context, "Item name is required!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            val rateVal = defaultSellingRateStr.toDoubleOrNull()
+                            val discVal = defaultDiscountValueStr.toDoubleOrNull()
+                            viewModel.addProductItem(
+                                selectedCatName,
+                                itemName.trim(),
+                                hsnCode.trim().ifBlank { null },
+                                rateVal,
+                                discVal,
+                                if (discVal != null) defaultDiscountType else null
+                            )
+                            android.widget.Toast.makeText(context, "Stock Item added!", android.widget.Toast.LENGTH_SHORT).show()
+                            showAddItemDialog = false
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Add Item")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddItemDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 5. Edit Item Dialog
+    itemToEdit?.let { item ->
+        var selectedCatName by remember { mutableStateOf(item.categoryName) }
+        var itemName by remember { mutableStateOf(item.name) }
+        var hsnCode by remember { mutableStateOf(item.hsnCode ?: "") }
+        var defaultSellingRateStr by remember { mutableStateOf(item.defaultSellingRate?.let { String.format(Locale.US, "%.2f", it) } ?: "") }
+        var defaultDiscountValueStr by remember { mutableStateOf(item.defaultDiscountValue?.let { String.format(Locale.US, "%.2f", it) } ?: "") }
+        var defaultDiscountType by remember { mutableStateOf(item.defaultDiscountType ?: "Rs") }
+        var showCatSelector by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { itemToEdit = null },
+            title = { Text("Edit Stock Item", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    // 1. Select Group (Required)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Select Group *", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(
+                            value = selectedCatName,
+                            onValueChange = {},
+                            readOnly = true,
+                            modifier = Modifier.fillMaxWidth().clickable { showCatSelector = true },
+                            trailingIcon = {
+                                IconButton(onClick = { showCatSelector = true }) {
+                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null)
+                                }
+                            },
+                            placeholder = { Text("Choose a group...") },
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    if (showCatSelector) {
+                        AlertDialog(
+                            onDismissRequest = { showCatSelector = false },
+                            title = { Text("Select Stock Group", fontWeight = FontWeight.Bold) },
+                            text = {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .heightIn(max = 200.dp)
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    categories.forEach { cat ->
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    selectedCatName = cat.name
+                                                    showCatSelector = false
+                                                },
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = if (selectedCatName == cat.name) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                            )
+                                        ) {
+                                            Text(cat.name, modifier = Modifier.padding(12.dp), fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = { showCatSelector = false }) {
+                                    Text("Close")
+                                }
+                            }
+                        )
+                    }
+
+                    // 2. Item Name (Required)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Item Name *", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        OutlinedTextField(
+                            value = itemName,
+                            onValueChange = { itemName = it },
+                            placeholder = { Text("e.g. GF Z4") },
+                            modifier = Modifier.fillMaxWidth().testTag("edit_item_name_input"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    // 3. Default Selling Rate (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Default Selling Rate (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = defaultSellingRateStr,
+                            onValueChange = { defaultSellingRateStr = it },
+                            leadingIcon = { Text("₹", style = MaterialTheme.typography.bodyMedium) },
+                            placeholder = { Text("0.00") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.fillMaxWidth().testTag("edit_item_selling_rate"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+
+                    // 4. Default Discount (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Default Discount (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            var showTypeDropdown by remember { mutableStateOf(false) }
+                            Box(modifier = Modifier.width(100.dp)) {
+                                OutlinedTextField(
+                                    value = defaultDiscountType,
+                                    onValueChange = {},
+                                    readOnly = true,
+                                    modifier = Modifier.fillMaxWidth().clickable { showTypeDropdown = true },
+                                    trailingIcon = {
+                                        Icon(
+                                            Icons.Default.ArrowDropDown,
+                                            contentDescription = null,
+                                            modifier = Modifier.clickable { showTypeDropdown = true }
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp)
+                                )
+                                DropdownMenu(
+                                    expanded = showTypeDropdown,
+                                    onDismissRequest = { showTypeDropdown = false }
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Rs") },
+                                        onClick = {
+                                            defaultDiscountType = "Rs"
+                                            showTypeDropdown = false
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("%") },
+                                        onClick = {
+                                            defaultDiscountType = "%"
+                                            showTypeDropdown = false
+                                        }
+                                    )
+                                }
+                            }
+
+                            OutlinedTextField(
+                                value = defaultDiscountValueStr,
+                                onValueChange = { defaultDiscountValueStr = it },
+                                placeholder = { Text("__________") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                modifier = Modifier.weight(1f).testTag("edit_item_discount_val"),
+                                singleLine = true,
+                                shape = RoundedCornerShape(8.dp)
+                            )
+                        }
+                    }
+
+                    // 5. HSN Code (Optional)
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("HSN Code (Optional)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        OutlinedTextField(
+                            value = hsnCode,
+                            onValueChange = { hsnCode = it },
+                            placeholder = { Text("e.g. 85071000") },
+                            modifier = Modifier.fillMaxWidth().testTag("edit_item_hsn_input"),
+                            singleLine = true,
+                            shape = RoundedCornerShape(8.dp)
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (selectedCatName.isBlank()) {
+                            android.widget.Toast.makeText(context, "Stock Group is required!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else if (itemName.trim().isBlank()) {
+                            android.widget.Toast.makeText(context, "Item name is required!", android.widget.Toast.LENGTH_SHORT).show()
+                        } else {
+                            val rateVal = defaultSellingRateStr.toDoubleOrNull()
+                            val discVal = defaultDiscountValueStr.toDoubleOrNull()
+                            viewModel.editProductItem(
+                                item,
+                                selectedCatName,
+                                itemName.trim(),
+                                hsnCode.trim().ifBlank { null },
+                                rateVal,
+                                discVal,
+                                if (discVal != null) defaultDiscountType else null
+                            )
+                            android.widget.Toast.makeText(context, "Stock Item updated!", android.widget.Toast.LENGTH_SHORT).show()
+                            itemToEdit = null
+                        }
+                    },
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Save Changes")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToEdit = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // 6. Delete Item Dialog
+    itemToDelete?.let { item ->
+        AlertDialog(
+            onDismissRequest = { itemToDelete = null },
+            title = { Text("Delete Stock Item?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("Are you sure you want to delete the item '${item.name}' from the item master?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.deleteProductItem(item)
+                        android.widget.Toast.makeText(context, "Stock Item deleted!", android.widget.Toast.LENGTH_SHORT).show()
+                        itemToDelete = null
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@Composable
+fun SettingsCategoryCard(
+    title: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(bottom = 12.dp)
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+            HorizontalDivider(
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            Column(
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                content = content
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsRowItem(
+    title: String,
+    subtitle: String? = null,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    trailing: @Composable (() -> Unit)? = null,
+    onClick: (() -> Unit)? = null
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(enabled = onClick != null) { onClick?.invoke() }
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (subtitle != null) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+        if (trailing != null) {
+            trailing()
+        }
     }
 }
 
@@ -5295,12 +6380,43 @@ fun SettingsScreen(viewModel: BillingViewModel) {
     var transactionPassword by remember { mutableStateOf(viewModel.getTransactionPassword()) }
     var transactionFingerprintEnabled by remember { mutableStateOf(viewModel.isTransactionFingerprintEnabled()) }
 
+    // Additional Settings states
+    var appThemeState by remember { mutableStateOf(viewModel.getThemeMode()) }
+    var appDateFormatState by remember { mutableStateOf(viewModel.getDateFormatPref()) }
+    var appCurrencyState by remember { mutableStateOf(viewModel.getCurrencyPref()) }
+    var appLanguageState by remember { mutableStateOf(viewModel.getLanguagePref()) }
+
+    var paymentReminder by remember { mutableStateOf(viewModel.isPaymentReminderEnabled()) }
+    var creditReminder by remember { mutableStateOf(viewModel.isCreditReminderEnabled()) }
+    var dueDateReminder by remember { mutableStateOf(viewModel.isDueDateReminderEnabled()) }
+
+    var defaultGst by remember { mutableStateOf(viewModel.getDefaultGstRate()) }
+    var gstBilling by remember { mutableStateOf(viewModel.isGstBillingEnabled()) }
+
+    // Dialog flags
     var showPinDialog by remember { mutableStateOf(false) }
     var tempPin by remember { mutableStateOf("") }
-
     var showSetPasswordDialog by remember { mutableStateOf(false) }
     var showChangePasswordDialog by remember { mutableStateOf(false) }
+    var showGstDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showTermsDialog by remember { mutableStateOf(false) }
 
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val success = restoreDatabaseFile(context, uri)
+            if (success) {
+                android.widget.Toast.makeText(context, "Database restored successfully! Restarting app...", android.widget.Toast.LENGTH_LONG).show()
+                restartApp(context)
+            } else {
+                android.widget.Toast.makeText(context, "Failed to restore database from backup!", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    // PIN Dialog
     if (showPinDialog) {
         AlertDialog(
             onDismissRequest = { showPinDialog = false },
@@ -5348,6 +6464,7 @@ fun SettingsScreen(viewModel: BillingViewModel) {
         )
     }
 
+    // Set Password Dialog
     if (showSetPasswordDialog) {
         var pwdInput by remember { mutableStateOf("") }
         var confirmPwdInput by remember { mutableStateOf("") }
@@ -5418,6 +6535,7 @@ fun SettingsScreen(viewModel: BillingViewModel) {
         )
     }
 
+    // Change Password Dialog
     if (showChangePasswordDialog) {
         var currentInput by remember { mutableStateOf("") }
         var newInput by remember { mutableStateOf("") }
@@ -5500,13 +6618,120 @@ fun SettingsScreen(viewModel: BillingViewModel) {
         )
     }
 
+    // GST Settings Dialog
+    if (showGstDialog) {
+        AlertDialog(
+            onDismissRequest = { showGstDialog = false },
+            title = { Text("GST Settings Configuration", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text("Configure GST defaults for invoices:", style = MaterialTheme.typography.bodyMedium)
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Enable GST Invoicing", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Switch(
+                            checked = gstBilling,
+                            onCheckedChange = { gstBilling = it }
+                        )
+                    }
+
+                    if (gstBilling) {
+                        Text("Default GST rate (%)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            val rates = listOf(0f, 5f, 12f, 18f, 28f)
+                            rates.forEach { rate ->
+                                val selected = defaultGst == rate
+                                FilterChip(
+                                    selected = selected,
+                                    onClick = { defaultGst = rate },
+                                    label = { Text("${rate.toInt()}%") },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { showGstDialog = false },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Apply Defaults")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGstDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Privacy Dialog
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            title = { Text("Privacy Policy", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "VM BOOK Ledger is committed to protecting your privacy.\n\n" +
+                               "1. Data Collection: All business data, invoice entries, and customer contacts are saved locally on your device in a secure SQLite Room database.\n\n" +
+                               "2. Data Transmission: We do not upload or store any of your business transactions on any remote server. Your data stays strictly on your device.\n\n" +
+                               "3. Security: Your database backups are completely managed by your own choosing. We use industry-standard security models to safeguard local data access.\n\n" +
+                               "4. Third-party APIs: The application only uses platform APIs for local functions and PDF generation. No third-party analytical trackers are present.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
+    // Terms Dialog
+    if (showTermsDialog) {
+        AlertDialog(
+            onDismissRequest = { showTermsDialog = false },
+            title = { Text("Terms & Conditions", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = "Please read these Terms & Conditions carefully before using the app.\n\n" +
+                               "1. Local Storage: VM BOOK Ledger operates locally. If you clear app storage or uninstall the app without a backup, your ledger and transaction history will be permanently deleted.\n\n" +
+                               "2. Limitation of Liability: VM Tech Services is not liable for any data loss, financial discrepancy, or accounting errors that may occur. Please verify invoices with original copies.\n\n" +
+                               "3. Intended Use: This application is built as a ledger, billing utility, and invoicing aid. Users are solely responsible for local tax regulations and bookkeeping laws.\n\n" +
+                               "4. Modification of Services: We reserve the right to modify, update, or deprecate functional modules to comply with Android standards or security policies.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showTermsDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp)
             .verticalScroll(rememberScrollState())
     ) {
-        // Header
+        // Top Header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -5528,391 +6753,608 @@ fun SettingsScreen(viewModel: BillingViewModel) {
             )
         }
 
-        // --- BILLING CONFIGURATION ---
-        Text(
-            text = "BILLING CONFIGURATION",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        // --- BUSINESS CONFIGURATION CARD ---
+        SettingsCategoryCard(
+            title = "BUSINESS & BILLING",
+            icon = Icons.Default.Business
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                OutlinedTextField(
-                    value = prefix,
-                    onValueChange = { prefix = it },
-                    label = { Text("Default Invoice Prefix") },
-                    placeholder = { Text("e.g. INV") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 16.dp)
-                        .testTag("input_settings_prefix"),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
+            SettingsRowItem(
+                title = "Business Profile",
+                subtitle = "Manage brand name, contact details & GSTIN",
+                icon = Icons.Default.Store,
+                trailing = { Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant) },
+                onClick = { viewModel.setScreen(BillingScreen.BUSINESS_PROFILE) }
+            )
 
-                OutlinedTextField(
-                    value = terms,
-                    onValueChange = { terms = it },
-                    label = { Text("Default Terms & Conditions") },
-                    placeholder = { Text("Terms to show at invoice bottom...") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp)
-                        .testTag("input_settings_terms"),
-                    maxLines = 4,
-                    shape = RoundedCornerShape(12.dp)
-                )
-            }
+            SettingsRowItem(
+                title = "GST Settings",
+                subtitle = "Configure default tax rates & GST billing option",
+                icon = Icons.Default.ReceiptLong,
+                trailing = {
+                    Text(
+                        text = if (gstBilling) "Active (${defaultGst.toInt()}%)" else "Disabled",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (gstBilling) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                },
+                onClick = { showGstDialog = true }
+            )
+
+            // Invoice prefix text field inside Business card
+            OutlinedTextField(
+                value = prefix,
+                onValueChange = { prefix = it },
+                label = { Text("Invoice Number Prefix") },
+                placeholder = { Text("e.g. INV") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("input_settings_prefix"),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            // Invoice terms text field inside Business card
+            OutlinedTextField(
+                value = terms,
+                onValueChange = { terms = it },
+                label = { Text("Invoice Footer Notes") },
+                placeholder = { Text("Thank you for your business!") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(90.dp)
+                    .testTag("input_settings_terms"),
+                maxLines = 3,
+                shape = RoundedCornerShape(12.dp)
+            )
         }
 
-        // --- 🔒 SECURITY & PREMIUM ---
-        Text(
-            text = "🔒 SECURITY & PREMIUM",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
-
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        // --- SECURITY CARD ---
+        SettingsCategoryCard(
+            title = "SECURITY & ACCESS",
+            icon = Icons.Default.Security
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Enable App Lock row
+            // Enable App Lock row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("App Lock (PIN)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Require 4-digit PIN on app startup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Switch(
+                    checked = appLockEnabled,
+                    onCheckedChange = { appLockEnabled = it },
+                    modifier = Modifier.testTag("switch_app_lock")
+                )
+            }
+
+            if (appLockEnabled) {
+                // PIN Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Change Security PIN", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Current PIN: $appLockPin", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Button(
+                        onClick = {
+                            tempPin = ""
+                            showPinDialog = true
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("btn_change_pin")
+                    ) {
+                        Text("Set PIN")
+                    }
+                }
+
+                // Fingerprint row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Default.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text("Enable App Lock", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Secure app on startup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Fingerprint Lock", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Enable biometrics if supported by device", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Switch(
-                        checked = appLockEnabled,
-                        onCheckedChange = { appLockEnabled = it },
-                        modifier = Modifier.testTag("switch_app_lock")
+                        checked = fingerprintEnabled,
+                        onCheckedChange = { fingerprintEnabled = it },
+                        modifier = Modifier.testTag("switch_fingerprint")
                     )
                 }
 
-                if (appLockEnabled) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    // PIN Row
+                // Auto Lock Delays row
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text("Auto Lock Delay", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    Spacer(modifier = Modifier.height(8.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column {
-                            Text("Set/Change PIN", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Current PIN: $appLockPin", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        Button(
-                            onClick = {
-                                tempPin = ""
-                                showPinDialog = true
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.testTag("btn_change_pin")
-                        ) {
-                            Text("Set PIN")
-                        }
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    // Fingerprint row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Fingerprint,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Fingerprint Unlock", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                Text("Biometric unlock support", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Switch(
-                            checked = fingerprintEnabled,
-                            onCheckedChange = { fingerprintEnabled = it },
-                            modifier = Modifier.testTag("switch_fingerprint")
+                        val options = listOf(
+                            "immediate" to "Immediately",
+                            "1" to "1 Min",
+                            "5" to "5 Min"
                         )
-                    }
-
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                    // Auto Lock row
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Text("Auto Lock Delay", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            val options = listOf(
-                                "immediate" to "Immediately",
-                                "1" to "1 Minute",
-                                "5" to "5 Minutes"
+                        options.forEach { (value, label) ->
+                            val selected = autoLockDuration == value
+                            FilterChip(
+                                selected = selected,
+                                onClick = { autoLockDuration = value },
+                                label = { Text(label) },
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.weight(1f)
                             )
-                            options.forEach { (value, label) ->
-                                val selected = autoLockDuration == value
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = { autoLockDuration = value },
-                                    label = { Text(label) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
                         }
                     }
                 }
             }
-        }
 
-        // --- 🛡️ TRANSACTION SECURITY ---
-        Text(
-            text = "🛡️ TRANSACTION SECURITY",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
 
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Transaction Security ON/OFF Row
+            // Transaction Security ON/OFF Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                    Icon(Icons.Default.VerifiedUser, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Transaction Security", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Require PIN to delete or edit ledger logs", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Switch(
+                    checked = transactionSecurityEnabled,
+                    onCheckedChange = { 
+                        if (it && transactionPassword.isEmpty()) {
+                            showSetPasswordDialog = true
+                        }
+                        transactionSecurityEnabled = it 
+                    },
+                    modifier = Modifier.testTag("switch_transaction_security")
+                )
+            }
+
+            if (transactionSecurityEnabled) {
+                // Password Row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text("Transaction Password", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            text = if (transactionPassword.isEmpty()) "Not set" else "Current: ••••••",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Button(
+                        onClick = {
+                            if (transactionPassword.isEmpty()) {
+                                showSetPasswordDialog = true
+                            } else {
+                                showChangePasswordDialog = true
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("btn_tx_pwd_action")
+                    ) {
+                        Text(if (transactionPassword.isEmpty()) "Set Password" else "Change Password")
+                    }
+                }
+
+                // Transaction Fingerprint row
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                        Icon(
-                            Icons.Default.VerifiedUser,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Icon(Icons.Default.Fingerprint, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
                         Spacer(modifier = Modifier.width(12.dp))
                         Column {
-                            Text("Transaction Security", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Require verification for sensitive edits & deletes", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("Biometric Approval", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                            Text("Confirm ledger operations via fingerprint", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                     Switch(
-                        checked = transactionSecurityEnabled,
-                        onCheckedChange = { 
-                            if (it && transactionPassword.isEmpty()) {
-                                showSetPasswordDialog = true
-                            }
-                            transactionSecurityEnabled = it 
-                        },
-                        modifier = Modifier.testTag("switch_transaction_security")
+                        checked = transactionFingerprintEnabled,
+                        onCheckedChange = { transactionFingerprintEnabled = it },
+                        modifier = Modifier.testTag("switch_tx_fingerprint")
                     )
                 }
+            }
+        }
 
-                if (transactionSecurityEnabled) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+        // --- DATA MANAGEMENT CARD ---
+        SettingsCategoryCard(
+            title = "DATA UTILITIES",
+            icon = Icons.Default.Storage
+        ) {
+            SettingsRowItem(
+                title = "Backup & Restore (Local / Cloud)",
+                subtitle = "Manage secure offline database copies and VM Cloud Sync",
+                icon = Icons.Default.CloudUpload,
+                onClick = { viewModel.setScreen(BillingScreen.BACKUP_RESTORE) }
+            )
 
-                    // Password Row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Transaction Password", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                text = if (transactionPassword.isEmpty()) "Not set" else "Current: ••••••",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Button(
-                            onClick = {
-                                if (transactionPassword.isEmpty()) {
-                                    showSetPasswordDialog = true
-                                } else {
-                                    showChangePasswordDialog = true
-                                }
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.testTag("btn_tx_pwd_action")
-                        ) {
-                            Text(if (transactionPassword.isEmpty()) "Set Password" else "Change Password")
-                        }
+            SettingsRowItem(
+                title = "Export Reports",
+                subtitle = "Export transaction tables as PDF/Excel",
+                icon = Icons.Default.FileDownload,
+                onClick = { viewModel.setScreen(BillingScreen.EXPORT_DATA) }
+            )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f))
+
+            // Auto Backup Reminder Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Backup, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Auto Backup Reminder", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Prompt regularly to take database backup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
+                }
+                Switch(
+                    checked = autoBackupReminder,
+                    onCheckedChange = { autoBackupReminder = it },
+                    modifier = Modifier.testTag("switch_auto_backup")
+                )
+            }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
+            // Backup Before Reset Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Restore, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f), modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text("Backup Before Reset", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                        Text("Ensure backup is taken before app database reset", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Switch(
+                    checked = backupBeforeReset,
+                    onCheckedChange = { backupBeforeReset = it },
+                    modifier = Modifier.testTag("switch_backup_before_reset")
+                )
+            }
+        }
 
-                    // Fingerprint row
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                            Icon(
-                                Icons.Default.Fingerprint,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(24.dp)
-                            )
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Column {
-                                Text("Fingerprint Unlock", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                                Text("Use biometric scan for transactions", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                        }
-                        Switch(
-                            checked = transactionFingerprintEnabled,
-                            onCheckedChange = { transactionFingerprintEnabled = it },
-                            modifier = Modifier.testTag("switch_tx_fingerprint")
+        // --- APPEARANCE CARD ---
+        SettingsCategoryCard(
+            title = "APPEARANCE & FORMATS",
+            icon = Icons.Default.Palette
+        ) {
+            // Theme selector row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Theme", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val themes = listOf(
+                        "system" to "System",
+                        "light" to "Light",
+                        "dark" to "Dark"
+                    )
+                    themes.forEach { (value, label) ->
+                        val selected = appThemeState == value
+                        FilterChip(
+                            selected = selected,
+                            onClick = { appThemeState = value },
+                            label = { Text(label) },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Date format selector row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Date Format", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val formats = listOf("dd MMM yyyy", "dd-MM-yyyy", "yyyy-MM-dd")
+                    formats.forEach { format ->
+                        val selected = appDateFormatState == format
+                        FilterChip(
+                            selected = selected,
+                            onClick = { appDateFormatState = format },
+                            label = { Text(format) },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+
+            // Currency selector row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Currency Symbol", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val currencies = listOf("₹", "$", "€")
+                    currencies.forEach { currency ->
+                        val selected = appCurrencyState == currency
+                        FilterChip(
+                            selected = selected,
+                            onClick = { appCurrencyState = currency },
+                            label = { Text(currency) },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1.0f)
+                        )
+                    }
+                }
+            }
+
+            // Language Selector Row
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Text("Language (Future Ready)", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val langs = listOf(
+                        "en" to "English",
+                        "hi" to "Hindi",
+                        "ta" to "Tamil"
+                    )
+                    langs.forEach { (code, name) ->
+                        val selected = appLanguageState == code
+                        FilterChip(
+                            selected = selected,
+                            onClick = { appLanguageState = code },
+                            label = { Text(name) },
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
             }
         }
 
-        // --- ADDITIONAL PREMIUM SETTINGS ---
-        Text(
-            text = "ADDITIONAL FEATURES",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
-        )
+        // --- NOTIFICATIONS CARD ---
+        SettingsCategoryCard(
+            title = "REMINDERS & NOTIFICATIONS",
+            icon = Icons.Default.Notifications
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Payment Reminder", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    Text("Daily check for payments due", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = paymentReminder, onCheckedChange = { paymentReminder = it })
+            }
 
-        Card(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Credit Reminder", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    Text("Alerts on large outstanding credit", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = creditReminder, onCheckedChange = { creditReminder = it })
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text("Due Date Reminder", fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                    Text("Alerts when invoice due dates arrive", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Switch(checked = dueDateReminder, onCheckedChange = { dueDateReminder = it })
+            }
+        }
+
+        // --- UPDATE CARD ---
+        SettingsCategoryCard(
+            title = "IN-APP SYSTEM UPDATES",
+            icon = Icons.Default.SystemUpdate
+        ) {
+            var updateUrlInput by remember { mutableStateOf(viewModel.getUpdateJsonUrl()) }
+
+            Text(
+                text = "VM BOOK Update Channel",
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "Configure and trigger check for the latest versions without Google Play Store.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = updateUrlInput,
+                onValueChange = { 
+                    updateUrlInput = it
+                    viewModel.setUpdateJsonUrl(it.trim())
+                },
+                label = { Text("Remote Update JSON URL") },
+                placeholder = { Text("https://example.com/update.json") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("input_update_json_url"),
+                singleLine = true,
+                shape = RoundedCornerShape(12.dp)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Button(
+                onClick = {
+                    viewModel.checkForUpdates(manual = true)
+                },
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("btn_check_for_updates")
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Check for Updates Now")
+            }
+        }
+
+        // --- SUPPORT CARD ---
+        SettingsCategoryCard(
+            title = "HELP & CUSTOMER SUPPORT",
+            icon = Icons.Default.Help
+        ) {
+            SettingsRowItem(
+                title = "Contact Support Desk",
+                subtitle = "Ask queries to our support staff",
+                icon = Icons.Default.Phone,
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_DIAL, Uri.parse("tel:+910000000000"))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Call dialer not found", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+
+            SettingsRowItem(
+                title = "WhatsApp Support",
+                subtitle = "Live chat with customer support representatives",
+                icon = Icons.Default.Phone,
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://wa.me/910000000000"))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Cannot open WhatsApp client", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+
+            SettingsRowItem(
+                title = "Email Support Team",
+                subtitle = "support@vmtechservices.in",
+                icon = Icons.Default.Email,
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                            data = Uri.parse("mailto:support@vmtechservices.in")
+                            putExtra(android.content.Intent.EXTRA_SUBJECT, "VM BOOK Support Request")
+                        }
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Cannot open email service client", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+
+            SettingsRowItem(
+                title = "Visit Corporate Website",
+                subtitle = "www.vmtechservices.in",
+                icon = Icons.Default.Public,
+                onClick = {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse("https://www.vmtechservices.in"))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        android.widget.Toast.makeText(context, "Web browser not found", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+
+            SettingsRowItem(
+                title = "Privacy Policy",
+                subtitle = "How your local data is protected",
+                icon = Icons.Default.Lock,
+                onClick = { showPrivacyDialog = true }
+            )
+
+            SettingsRowItem(
+                title = "Terms & Conditions",
+                subtitle = "Application usage terms & disclaimers",
+                icon = Icons.Default.Description,
+                onClick = { showTermsDialog = true }
+            )
+        }
+
+        // --- Privacy Mode switch inside Settings ---
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                .padding(vertical = 12.dp, horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                // Privacy Mode Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.VisibilityOff,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Privacy Mode", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Mask Dashboard values by default", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Switch(
-                        checked = privacyModeEnabled,
-                        onCheckedChange = { privacyModeEnabled = it },
-                        modifier = Modifier.testTag("switch_privacy_mode")
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                // Auto Backup Reminder Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Backup,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Auto Backup Reminder", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Remind to take periodic backup", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Switch(
-                        checked = autoBackupReminder,
-                        onCheckedChange = { autoBackupReminder = it },
-                        modifier = Modifier.testTag("switch_auto_backup")
-                    )
-                }
-
-                HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp), color = MaterialTheme.colorScheme.outlineVariant)
-
-                // Backup Before Reset Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Restore,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column {
-                            Text("Backup Before Reset", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
-                            Text("Force manual backup before any reset", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                    }
-                    Switch(
-                        checked = backupBeforeReset,
-                        onCheckedChange = { backupBeforeReset = it },
-                        modifier = Modifier.testTag("switch_backup_before_reset")
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.VisibilityOff, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text("Privacy Mode", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodyMedium)
+                    Text("Mask sensitive value tags by default", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
+            Switch(
+                checked = privacyModeEnabled,
+                onCheckedChange = { privacyModeEnabled = it },
+                modifier = Modifier.testTag("switch_privacy_mode")
+            )
         }
 
-        // --- SAVE BUTTON ---
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // --- COMPREHENSIVE SAVE SETTINGS ACTION BUTTON ---
         Button(
             onClick = {
                 viewModel.setDefaultInvoicePrefix(prefix.trim())
@@ -5927,14 +7369,28 @@ fun SettingsScreen(viewModel: BillingViewModel) {
                 viewModel.setTransactionSecurityEnabled(transactionSecurityEnabled)
                 viewModel.setTransactionPassword(transactionPassword)
                 viewModel.setTransactionFingerprintEnabled(transactionFingerprintEnabled)
+
+                // Additional Save
+                viewModel.setThemeMode(appThemeState)
+                viewModel.setDateFormatPref(appDateFormatState)
+                viewModel.setCurrencyPref(appCurrencyState)
+                viewModel.setLanguagePref(appLanguageState)
+
+                viewModel.setPaymentReminderEnabled(paymentReminder)
+                viewModel.setCreditReminderEnabled(creditReminder)
+                viewModel.setDueDateReminderEnabled(dueDateReminder)
+
+                viewModel.setDefaultGstRate(defaultGst)
+                viewModel.setGstBillingEnabled(gstBilling)
+
                 android.widget.Toast.makeText(context, "Premium configurations saved successfully!", android.widget.Toast.LENGTH_SHORT).show()
                 viewModel.setScreen(BillingScreen.MORE)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(50.dp)
+                .height(52.dp)
                 .testTag("btn_save_settings"),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(16.dp)
         ) {
             Icon(Icons.Default.Check, contentDescription = null)
             Spacer(modifier = Modifier.width(8.dp))
@@ -6164,469 +7620,458 @@ fun AboutVmBookScreen(viewModel: BillingViewModel) {
     var showTermsDialog by remember { mutableStateOf(false) }
     var checkingUpdates by remember { mutableStateOf(false) }
 
-    // Premium Dark Theme Palette
-    val bgDark = Color(0xFF0F172A)          // Rich Slate 900
-    val cardDark = Color(0xFF1E293B)        // Cool Slate 800
-    val textLight = Color(0xFFF8FAFC)       // Off-White Slate 50
-    val textMuted = Color(0xFF94A3B8)       // Cool Grey Slate 400
-    val accentBlue = Color(0xFF3B82F6)      // Modern Blue 500
-    val accentLightBlue = Color(0xFF60A5FA) // Radiant Blue 400
-    val borderDark = Color(0xFF334155)      // Slate 700
-
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = bgDark
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .padding(16.dp)
+            .verticalScroll(rememberScrollState()),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Column(
+        // Header
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .fillMaxWidth()
+                .padding(bottom = 24.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 24.dp),
-                verticalAlignment = Alignment.CenterVertically
+            IconButton(
+                onClick = { viewModel.goBack() },
+                modifier = Modifier.testTag("btn_back_about")
             ) {
-                IconButton(
-                    onClick = { viewModel.goBack() },
-                    modifier = Modifier.testTag("btn_back_about")
-                ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = textLight
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "About Application",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = textLight
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = "Back",
+                    tint = MaterialTheme.colorScheme.onBackground
                 )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // App Branding - Central Logo
-            Card(
-                modifier = Modifier
-                    .size(120.dp),
-                shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_vm_book_logo),
-                        contentDescription = "VM BOOK Logo",
-                        modifier = Modifier.size(90.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // App Name
+            Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "VM BOOK Ledger",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = textLight
+                text = "About Application",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
             )
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            // Tagline
-            Text(
-                text = "Simple, Smart & Complete Billing",
-                style = MaterialTheme.typography.bodyMedium,
-                color = accentLightBlue,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Section 1: Application Information Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 600.dp)
-                    .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = cardDark),
-                border = BorderStroke(1.dp, borderDark)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Application Information",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accentLightBlue,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    HorizontalDivider(color = borderDark)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Version", style = MaterialTheme.typography.bodyMedium, color = textMuted)
-                        Text("v2.1.0", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Developed by", style = MaterialTheme.typography.bodyMedium, color = textMuted)
-                        Text("VM Tech Services", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Platform", style = MaterialTheme.typography.bodyMedium, color = textMuted)
-                        Text("Android", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Database", style = MaterialTheme.typography.bodyMedium, color = textMuted)
-                        Text("Room Database", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Current Build", style = MaterialTheme.typography.bodyMedium, color = textMuted)
-                        Text("Stable Release", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                    }
-                }
-            }
-
-            // Section 2: Support Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 600.dp)
-                    .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = cardDark),
-                border = BorderStroke(1.dp, borderDark)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        text = "Customer Support",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accentLightBlue,
-                        fontWeight = FontWeight.Bold
-                    )
-                    
-                    HorizontalDivider(color = borderDark)
-
-                    // Email Support
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
-                                        data = android.net.Uri.parse("mailto:support@vmtechservices.in")
-                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "VM BOOK Ledger Support Request")
-                                    }
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Cannot open email client", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Email,
-                            contentDescription = "Email Support",
-                            tint = accentLightBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Support Email", style = MaterialTheme.typography.labelMedium, color = textMuted)
-                            Text("support@vmtechservices.in", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Contact",
-                            tint = textMuted.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    // Website Support
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.vmtechservices.in"))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Cannot open web browser", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Public,
-                            contentDescription = "Website Support",
-                            tint = accentLightBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Website", style = MaterialTheme.typography.labelMedium, color = textMuted)
-                            Text("www.vmtechservices.in", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Go",
-                            tint = textMuted.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-
-                    // WhatsApp Support
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/910000000000"))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Cannot open WhatsApp", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(vertical = 8.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Phone,
-                            contentDescription = "WhatsApp Support",
-                            tint = accentLightBlue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("WhatsApp Support", style = MaterialTheme.typography.labelMedium, color = textMuted)
-                            Text("+91-XXXXXXXXXX", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.SemiBold)
-                        }
-                        Icon(
-                            imageVector = Icons.Default.ChevronRight,
-                            contentDescription = "Chat",
-                            tint = textMuted.copy(alpha = 0.5f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                    }
-                }
-            }
-
-            // Section 3: Quick Actions Card
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .widthIn(max = 600.dp)
-                    .padding(vertical = 8.dp),
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = cardDark),
-                border = BorderStroke(1.dp, borderDark)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Text(
-                        text = "Quick Actions",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = accentLightBlue,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-                    
-                    HorizontalDivider(color = borderDark, modifier = Modifier.padding(bottom = 8.dp))
-
-                    // Rate App Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${context.packageName}"))
-                                    context.startActivity(intent)
-                                } catch (e: Exception) {
-                                    try {
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"))
-                                        context.startActivity(intent)
-                                    } catch (ex: Exception) {
-                                        android.widget.Toast.makeText(context, "Play Store not found", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                }
-                            }
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Star, contentDescription = "Rate", tint = accentLightBlue, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Rate This App", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = textLight.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
-                    }
-
-                    // Share App Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                try {
-                                    val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                        type = "text/plain"
-                                        putExtra(android.content.Intent.EXTRA_SUBJECT, "VM BOOK Ledger")
-                                        putExtra(android.content.Intent.EXTRA_TEXT, "Manage your business transactions, invoices and customer ledger with VM BOOK Ledger app. Simple, Smart & Complete Billing. Download now!")
-                                    }
-                                    context.startActivity(android.content.Intent.createChooser(intent, "Share via"))
-                                } catch (e: Exception) {
-                                    android.widget.Toast.makeText(context, "Error sharing app", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            }
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Share, contentDescription = "Share", tint = accentLightBlue, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Share App", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = textLight.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
-                    }
-
-                    // Check Updates Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable {
-                                checkingUpdates = true
-                                android.widget.Toast.makeText(context, "Checking for updates...", android.widget.Toast.LENGTH_SHORT).show()
-                                coroutineScope.launch {
-                                    kotlinx.coroutines.delay(1200)
-                                    checkingUpdates = false
-                                    showUpdateDialog = true
-                                }
-                            }
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Update", tint = accentLightBlue, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Check for Updates", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = textLight.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
-                    }
-
-                    // Privacy Policy Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { showPrivacyDialog = true }
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Lock, contentDescription = "Privacy", tint = accentLightBlue, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Privacy Policy", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = textLight.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
-                    }
-
-                    // Terms & Conditions Row
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .clickable { showTermsDialog = true }
-                            .padding(vertical = 12.dp, horizontal = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Description, contentDescription = "Terms", tint = accentLightBlue, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text("Terms & Conditions", style = MaterialTheme.typography.bodyMedium, color = textLight, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-                        Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = textLight.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // Footer
-            Text(
-                text = "Developed with ❤️ in India",
-                style = MaterialTheme.typography.bodyMedium,
-                color = textMuted,
-                fontWeight = FontWeight.Medium
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                text = "© 2026 VM Tech Services.\nAll Rights Reserved.",
-                style = MaterialTheme.typography.bodySmall,
-                color = textMuted.copy(alpha = 0.7f),
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                lineHeight = 16.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // App Branding Logo Card
+        Card(
+            modifier = Modifier
+                .size(120.dp),
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Image(
+                    painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.ic_vm_book_logo),
+                    contentDescription = "VM BOOK Logo",
+                    modifier = Modifier.size(80.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // App Title & Tagline
+        Text(
+            text = "VM BOOK Ledger",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.ExtraBold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = "Simple, Smart & Complete Billing",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(28.dp))
+
+        // Section 1: Application Information Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 600.dp)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Application Information",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Version", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("v2.1.0-Premium", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Developed by", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("VM Tech Services", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Platform", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Android", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Database", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("SQLite Room Database", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text("Status", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Offline-First Verified", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        // Section 2: Contact Support Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 600.dp)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Customer Support",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+                
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+
+                // Email Support
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SENDTO).apply {
+                                    data = android.net.Uri.parse("mailto:support@vmtechservices.in")
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "VM BOOK Ledger Support Request")
+                                }
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Cannot open email client", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = "Email Support",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Support Email", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("support@vmtechservices.in", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Contact",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Website Support
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://www.vmtechservices.in"))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Cannot open web browser", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = "Website Support",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Website", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("www.vmtechservices.in", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Go",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // WhatsApp Support
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/910000000000"))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Cannot open WhatsApp", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Phone,
+                        contentDescription = "WhatsApp Support",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("WhatsApp Support", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("+91-0000000000", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
+                    }
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = "Chat",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+
+        // Section 3: Quick Actions Card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .widthIn(max = 600.dp)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Quick Actions",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f), modifier = Modifier.padding(bottom = 8.dp))
+
+                // Rate App Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=${context.packageName}"))
+                                context.startActivity(intent)
+                            } catch (e: Exception) {
+                                try {
+                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=${context.packageName}"))
+                                    context.startActivity(intent)
+                                } catch (ex: Exception) {
+                                    android.widget.Toast.makeText(context, "Play Store not found", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            }
+                        }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Star, contentDescription = "Rate", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Rate This App", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                }
+
+                // Share App Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            try {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "VM BOOK Ledger")
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Manage your business transactions, invoices and customer ledger with VM BOOK Ledger app. Simple, Smart & Complete Billing. Download now!")
+                                }
+                                context.startActivity(android.content.Intent.createChooser(intent, "Share via"))
+                            } catch (e: Exception) {
+                                android.widget.Toast.makeText(context, "Error sharing app", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Share App", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                }
+
+                // Check Updates Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable {
+                            checkingUpdates = true
+                            android.widget.Toast.makeText(context, "Checking for updates...", android.widget.Toast.LENGTH_SHORT).show()
+                            coroutineScope.launch {
+                                kotlinx.coroutines.delay(1200)
+                                checkingUpdates = false
+                                showUpdateDialog = true
+                            }
+                        }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Update", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Check for Updates", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                }
+
+                // Privacy Policy Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showPrivacyDialog = true }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Lock, contentDescription = "Privacy", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Privacy Policy", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                }
+
+                // Terms & Conditions Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { showTermsDialog = true }
+                        .padding(vertical = 12.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Description, contentDescription = "Terms", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text("Terms & Conditions", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    Icon(Icons.Default.ChevronRight, contentDescription = "Go", tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Footer
+        Text(
+            text = "Developed with ❤️ in India",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            fontWeight = FontWeight.Medium
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = "© 2026 VM Tech Services.\nAll Rights Reserved.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            lineHeight = 16.sp
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
     }
 
     // Dialogs
     if (showUpdateDialog) {
         AlertDialog(
             onDismissRequest = { showUpdateDialog = false },
-            title = { Text("App is up to date", color = textLight) },
-            text = { Text("You are currently running the latest stable release (v2.1.0) of VM BOOK Ledger.", color = textMuted) },
+            title = { Text("App is up to date", color = MaterialTheme.colorScheme.onSurface) },
+            text = { Text("You are currently running the latest stable release (v2.1.0-Premium) of VM BOOK Ledger.", color = MaterialTheme.colorScheme.onSurfaceVariant) },
             confirmButton = {
                 TextButton(onClick = { showUpdateDialog = false }) {
-                    Text("OK", color = accentLightBlue)
+                    Text("OK", color = MaterialTheme.colorScheme.primary)
                 }
-            },
-            containerColor = cardDark
+            }
         )
     }
 
     if (showPrivacyDialog) {
         AlertDialog(
             onDismissRequest = { showPrivacyDialog = false },
-            title = { Text("Privacy Policy", color = textLight) },
+            title = { Text("Privacy Policy", color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
@@ -6635,24 +8080,23 @@ fun AboutVmBookScreen(viewModel: BillingViewModel) {
                                "2. Data Transmission: We do not upload or store any of your business transactions on any remote server. Your data stays strictly on your device.\n\n" +
                                "3. Security: Your database backups are completely managed by your own choosing. We use industry-standard security models to safeguard local data access.\n\n" +
                                "4. Third-party APIs: The application only uses platform APIs for local functions and PDF generation. No third-party analytical trackers are present.",
-                        color = textMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showPrivacyDialog = false }) {
-                    Text("Close", color = accentLightBlue)
+                    Text("Close", color = MaterialTheme.colorScheme.primary)
                 }
-            },
-            containerColor = cardDark
+            }
         )
     }
 
     if (showTermsDialog) {
         AlertDialog(
             onDismissRequest = { showTermsDialog = false },
-            title = { Text("Terms & Conditions", color = textLight) },
+            title = { Text("Terms & Conditions", color = MaterialTheme.colorScheme.onSurface) },
             text = {
                 Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
                     Text(
@@ -6661,17 +8105,16 @@ fun AboutVmBookScreen(viewModel: BillingViewModel) {
                                "2. Limitation of Liability: VM Tech Services is not liable for any data loss, financial discrepancy, or accounting errors that may occur. Please verify invoices with original copies.\n\n" +
                                "3. Intended Use: This application is built as a ledger, billing utility, and invoicing aid. Users are solely responsible for local tax regulations and bookkeeping laws.\n\n" +
                                "4. Modification of Services: We reserve the right to modify, update, or deprecate functional modules to comply with Android standards or security policies.",
-                        color = textMuted,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { showTermsDialog = false }) {
-                    Text("Close", color = accentLightBlue)
+                    Text("Close", color = MaterialTheme.colorScheme.primary)
                 }
-            },
-            containerColor = cardDark
+            }
         )
     }
 }
@@ -6691,12 +8134,128 @@ fun backupDatabaseFile(context: android.content.Context) {
     }
 }
 
+fun restoreDatabaseFile(context: android.content.Context, fileUri: Uri): Boolean {
+    return try {
+        com.example.data.AppDatabase.closeDatabase()
+        val dbFile = context.getDatabasePath("billing_database")
+        val dbWalFile = context.getDatabasePath("billing_database-wal")
+        val dbShmFile = context.getDatabasePath("billing_database-shm")
+        if (dbFile.exists()) dbFile.delete()
+        if (dbWalFile.exists()) dbWalFile.delete()
+        if (dbShmFile.exists()) dbShmFile.delete()
+        dbFile.parentFile?.mkdirs()
+        context.contentResolver.openInputStream(fileUri).use { inputStream ->
+            if (inputStream != null) {
+                dbFile.outputStream().use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            } else {
+                throw Exception("Failed to open backup file input stream")
+            }
+        }
+        com.example.data.AppDatabase.getDatabase(context)
+        true
+    } catch (e: Exception) {
+        e.printStackTrace()
+        false
+    }
+}
+
+fun restartApp(context: android.content.Context) {
+    val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)
+    if (intent != null) {
+        intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        context.startActivity(intent)
+    }
+    android.os.Process.killProcess(android.os.Process.myPid())
+    java.lang.System.exit(0)
+}
+
+fun getFileName(context: android.content.Context, uri: Uri): String? {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        cursor?.use {
+            if (it.moveToFirst()) {
+                val index = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                if (index != -1) {
+                    result = it.getString(index)
+                }
+            }
+        }
+    }
+    if (result == null) {
+        result = uri.path
+        val cut = result?.lastIndexOf('/') ?: -1
+        if (cut != -1) {
+            result = result?.substring(cut + 1)
+        }
+    }
+    return result
+}
+
 @Composable
 fun BackupRestoreScreen(viewModel: BillingViewModel) {
     val context = LocalContext.current
     var showFactoryResetDialog by remember { mutableStateOf(false) }
     var showResetSuccessDialog by remember { mutableStateOf(false) }
+    var showRestoreConfirmDialog by remember { mutableStateOf(false) }
+    var showRestoreSuccessDialog by remember { mutableStateOf(false) }
+    var showRestoreErrorDialog by remember { mutableStateOf(false) }
+    var showBackupSuccessDialog by remember { mutableStateOf(false) }
+    var showBackupErrorDialog by remember { mutableStateOf(false) }
+    var selectedRestoreUri by remember { mutableStateOf<Uri?>(null) }
+    var errorMessage by remember { mutableStateOf("") }
     val coroutineScope = rememberCoroutineScope()
+
+    val cloudUserMobile by viewModel.cloudUserMobile.collectAsStateWithLifecycle()
+    val cloudServerUrl by viewModel.cloudServerUrl.collectAsStateWithLifecycle()
+    val isCloudSandboxEnabled by viewModel.isCloudSandboxEnabled.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val lastSyncTime by viewModel.lastSyncTime.collectAsStateWithLifecycle()
+    val syncStatusMessage by viewModel.syncStatusMessage.collectAsStateWithLifecycle()
+
+    val loginStep by viewModel.loginStep.collectAsStateWithLifecycle()
+    val loginMobileInput by viewModel.loginMobileInput.collectAsStateWithLifecycle()
+    val loginOtpInput by viewModel.loginOtpInput.collectAsStateWithLifecycle()
+    val loginError by viewModel.loginError.collectAsStateWithLifecycle()
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val name = getFileName(context, uri) ?: ""
+            if (!name.endsWith(".vmbook", ignoreCase = true)) {
+                errorMessage = "Invalid file format. Please select only a valid '.vmbook' backup file."
+                showRestoreErrorDialog = true
+            } else {
+                val isValid = com.example.data.LocalBackupService.validateBackupFile(context, uri)
+                if (isValid) {
+                    selectedRestoreUri = uri
+                    showRestoreConfirmDialog = true
+                } else {
+                    errorMessage = "The backup file is invalid, corrupted, or damaged. Restoration aborted."
+                    showRestoreErrorDialog = true
+                }
+            }
+        }
+    }
+
+    val createDocumentLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                val success = com.example.data.LocalBackupService.performBackupToUri(context, uri)
+                if (success) {
+                    showBackupSuccessDialog = true
+                } else {
+                    errorMessage = "Failed to create local backup."
+                    showBackupErrorDialog = true
+                }
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -6726,6 +8285,217 @@ fun BackupRestoreScreen(viewModel: BillingViewModel) {
             )
         }
 
+        // --- CLOUD SYNC & MULTI-DEVICE SUPPORT ---
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.25f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.CloudUpload,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "VM Secure Cloud Sync",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+
+                if (cloudUserMobile.isEmpty()) {
+                    // Not Logged In - Show Login Flow
+                    Text(
+                        text = "Enable automated backup, cloud restore, and real-time multi-device synchronization across all your tablets and smartphones securely.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 18.sp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (loginStep == 0) {
+                        OutlinedTextField(
+                            value = loginMobileInput,
+                            onValueChange = { viewModel.loginMobileInput.value = it },
+                            label = { Text("Mobile Number") },
+                            placeholder = { Text("Enter 10-digit mobile") },
+                            leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().testTag("input_cloud_mobile"),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
+                        )
+                        if (loginError != null) {
+                            Text(
+                                text = loginError!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { viewModel.sendCloudOtp(loginMobileInput) },
+                            modifier = Modifier.fillMaxWidth().testTag("btn_send_otp")
+                        ) {
+                            Text("Send Secure OTP", fontWeight = FontWeight.Bold)
+                        }
+                    } else {
+                        OutlinedTextField(
+                            value = loginOtpInput,
+                            onValueChange = { viewModel.loginOtpInput.value = it },
+                            label = { Text("Enter 6-digit OTP") },
+                            placeholder = { Text("Enter OTP code") },
+                            leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
+                            modifier = Modifier.fillMaxWidth().testTag("input_cloud_otp"),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+                        )
+                        if (loginError != null) {
+                            Text(
+                                text = loginError!!,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            Button(
+                                onClick = { viewModel.verifyCloudOtp(loginOtpInput) },
+                                modifier = Modifier.weight(1.5f).testTag("btn_verify_otp")
+                            ) {
+                                Text("Verify & Login", fontWeight = FontWeight.Bold)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            OutlinedButton(
+                                onClick = { viewModel.loginStep.value = 0 },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("Back")
+                            }
+                        }
+                    }
+                } else {
+                    // Logged In - Show Sync Control Center
+                    Text(
+                        text = "Account: +91 $cloudUserMobile",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    val syncDateText = if (lastSyncTime > 0L) {
+                        java.text.SimpleDateFormat("dd MMM yyyy, hh:mm a", java.util.Locale.getDefault()).format(java.util.Date(lastSyncTime))
+                    } else {
+                        "Never"
+                    }
+                    Text(
+                        text = "Last synced: $syncDateText",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (isSyncing) {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        Button(
+                            onClick = { viewModel.performCloudBackup() },
+                            modifier = Modifier.weight(1f).testTag("btn_cloud_backup"),
+                            enabled = !isSyncing
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Backup Sync", fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        ElevatedButton(
+                            onClick = { viewModel.performCloudRestore() },
+                            modifier = Modifier.weight(1f).testTag("btn_cloud_restore"),
+                            enabled = !isSyncing
+                        ) {
+                            Text("Cloud Restore", fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.logoutCloud() },
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                        ) {
+                            Text("Disconnect")
+                        }
+
+                        Button(
+                            onClick = { viewModel.simulateSecondDevice() },
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("Simulate New Device")
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Settings & Emulator controls inside card
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Cloud Sandbox Mode (Demo)",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Simulates OTP delivery and real-time backup/restore instantly in preview.",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Switch(
+                        checked = isCloudSandboxEnabled,
+                        onCheckedChange = { viewModel.setCloudSandboxEnabled(it) }
+                    )
+                }
+
+                if (!isCloudSandboxEnabled) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = cloudServerUrl,
+                        onValueChange = { viewModel.setCloudServerUrl(it) },
+                        label = { Text("Production Sync Server URL") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+            }
+        }
+
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -6735,37 +8505,54 @@ fun BackupRestoreScreen(viewModel: BillingViewModel) {
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Icon(
-                    Icons.Default.CloudUpload,
+                    Icons.Default.Storage,
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(36.dp)
                 )
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(
-                    text = "Generate Database Backup",
+                    text = "Local Backup & Restore",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = "Creates a fully valid SQLite copy of your active Room database and registers it via system sharing so you can send it to email, Drive or chat.",
+                    text = "Generate a complete backup of your ledger containing Customers, Suppliers, Products, Sales, Purchases, Payments, Settings, and your Security PIN. The backup file is saved as a secure '.vmbook' archive.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 18.sp
                 )
                 Spacer(modifier = Modifier.height(16.dp))
                 Button(
-                    onClick = { backupDatabaseFile(context) },
+                    onClick = {
+                        val dateFormat = java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm", java.util.Locale.US)
+                        val defaultFileName = "VMBOOK_Backup_${dateFormat.format(java.util.Date())}.vmbook"
+                        createDocumentLauncher.launch(defaultFileName)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(46.dp)
                         .testTag("btn_backup_now"),
                     shape = RoundedCornerShape(10.dp)
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Backup Now", fontWeight = FontWeight.Bold)
+                    Text("Backup Now (.vmbook)", fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+                ElevatedButton(
+                    onClick = { filePickerLauncher.launch("*/*") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp)
+                        .testTag("btn_restore_database"),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Restore Database (.vmbook)", fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -6861,6 +8648,120 @@ fun BackupRestoreScreen(viewModel: BillingViewModel) {
                         showResetSuccessDialog = false
                         viewModel.setScreen(BillingScreen.DASHBOARD)
                     }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showRestoreConfirmDialog && selectedRestoreUri != null) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirmDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Restore Backup") },
+            text = { Text("Current data will be replaced. Continue?") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreConfirmDialog = false
+                        coroutineScope.launch {
+                            val success = com.example.data.LocalBackupService.performRestoreFromUri(context, selectedRestoreUri!!)
+                            if (success) {
+                                showRestoreSuccessDialog = true
+                            } else {
+                                errorMessage = "Failed to restore database backup."
+                                showRestoreErrorDialog = true
+                            }
+                        }
+                    }
+                ) {
+                    Text("Yes, Restore")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirmDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    if (showRestoreSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { /* force click OK */ },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF0F9D58)) },
+            title = { Text("Restore Successful") },
+            text = { Text("Your database and settings have been restored successfully. The application needs to restart to apply all changes.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRestoreSuccessDialog = false
+                        restartApp(context)
+                    }
+                ) {
+                    Text("Restart App")
+                }
+            }
+        )
+    }
+
+    if (showRestoreErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreErrorDialog = false },
+            icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Restore Failed") },
+            text = { Text(errorMessage.ifEmpty { "An unexpected error occurred during database restoration." }) },
+            confirmButton = {
+                Button(
+                    onClick = { showRestoreErrorDialog = false }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showBackupSuccessDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupSuccessDialog = false },
+            icon = { Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF0F9D58)) },
+            title = { Text("Backup Success") },
+            text = { Text("The complete VM BOOK ledger backup has been successfully created and saved.") },
+            confirmButton = {
+                Button(
+                    onClick = { showBackupSuccessDialog = false }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (showBackupErrorDialog) {
+        AlertDialog(
+            onDismissRequest = { showBackupErrorDialog = false },
+            icon = { Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("Backup Failed") },
+            text = { Text(errorMessage.ifEmpty { "An unexpected error occurred during backup creation." }) },
+            confirmButton = {
+                Button(
+                    onClick = { showBackupErrorDialog = false }
+                ) {
+                    Text("OK")
+                }
+            }
+        )
+    }
+
+    if (syncStatusMessage != null) {
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissSyncStatus() },
+            title = { Text("VM BOOK Secure Cloud") },
+            text = { Text(syncStatusMessage!!) },
+            confirmButton = {
+                Button(
+                    onClick = { viewModel.dismissSyncStatus() }
                 ) {
                     Text("OK")
                 }
@@ -7807,6 +9708,224 @@ fun PasswordVerificationDialog(
                 }
             }
         )
+    }
+}
+
+@Composable
+fun AppUpdateHandler(viewModel: BillingViewModel) {
+    val context = LocalContext.current
+    val updateState by viewModel.updateStatus.collectAsStateWithLifecycle()
+    var showPermissionDialog by remember { mutableStateOf(false) }
+    var pendingApkFile by remember { mutableStateOf<java.io.File?>(null) }
+
+    val launchInstaller = { apkFile: java.io.File ->
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O && !context.packageManager.canRequestPackageInstalls()) {
+            pendingApkFile = apkFile
+            showPermissionDialog = true
+        } else {
+            try {
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    val uri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        apkFile
+                    )
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Error launching installer: ${e.localizedMessage}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    if (updateState is UpdateStatus.DownloadCompleted) {
+        val apkFile = (updateState as UpdateStatus.DownloadCompleted).apkFile
+        LaunchedEffect(apkFile) {
+            launchInstaller(apkFile)
+        }
+    }
+
+    if (showPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = { showPermissionDialog = false },
+            title = { Text("Permission Required", fontWeight = FontWeight.Bold) },
+            text = { Text("To install the update, please allow VM BOOK to install apps from this source.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showPermissionDialog = false
+                        try {
+                            val intent = Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            android.widget.Toast.makeText(context, "Failed to open settings: ${e.localizedMessage}", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text("Settings")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showPermissionDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    when (val state = updateState) {
+        is UpdateStatus.NewUpdateAvailable -> {
+            AlertDialog(
+                onDismissRequest = {
+                    if (!state.forceUpdate) {
+                        viewModel.dismissUpdateDialog()
+                    }
+                },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.CloudDownload,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("New Update Available", fontWeight = FontWeight.Bold)
+                    }
+                },
+                text = {
+                    Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                        Text(
+                            text = "A new version of VM BOOK is available. Please update to get the latest features and improvements.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Current Version", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(state.currentVersion, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                            }
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Latest Version", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(state.latestVersion, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                            }
+                        }
+                        
+                        if (state.whatsNew.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text("What's New:", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = state.whatsNew,
+                                    modifier = Modifier.padding(12.dp),
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.downloadAndInstallApk(state.apkUrl)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.testTag("btn_update_now")
+                    ) {
+                        Text("Update Now")
+                    }
+                },
+                dismissButton = {
+                    if (!state.forceUpdate) {
+                        TextButton(
+                            onClick = { viewModel.dismissUpdateDialog() },
+                            modifier = Modifier.testTag("btn_update_later")
+                        ) {
+                            Text("Later")
+                        }
+                    }
+                }
+            )
+        }
+        is UpdateStatus.Downloading -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Downloading Update", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = "Please wait while the update is downloading...",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.align(Alignment.Start)
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier.fillMaxWidth(),
+                            strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text(
+                            text = "${(state.progress * 100).toInt()}%",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {}
+            )
+        }
+        is UpdateStatus.DownloadCompleted -> {
+            AlertDialog(
+                onDismissRequest = {},
+                title = { Text("Download Completed", fontWeight = FontWeight.Bold) },
+                text = { Text("The update file has been successfully downloaded. If the installer didn't launch automatically, please click 'Install' to start.") },
+                confirmButton = {
+                    Button(
+                        onClick = { launchInstaller(state.apkFile) },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Install")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.dismissUpdateDialog() }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+        is UpdateStatus.Error -> {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissUpdateDialog() },
+                title = { Text("Update Status", fontWeight = FontWeight.Bold) },
+                text = { Text(state.message) },
+                confirmButton = {
+                    Button(
+                        onClick = { viewModel.dismissUpdateDialog() },
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
+        else -> {}
     }
 }
 

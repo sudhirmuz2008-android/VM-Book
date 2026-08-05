@@ -118,9 +118,12 @@ data class StockItem(
 )
 
 data class InvoiceItemDraft(
+    val categoryName: String = "",
     val name: String = "",
     val price: String = "",
-    val quantity: String = "1"
+    val quantity: String = "1",
+    val hsnCode: String = "",
+    val discount: String = ""
 )
 
 class BillingViewModel(
@@ -130,10 +133,106 @@ class BillingViewModel(
 
     private val sharedPrefs = application.getSharedPreferences("business_profile_prefs", android.content.Context.MODE_PRIVATE)
 
+    val updateJsonUrl = MutableStateFlow(sharedPrefs.getString("update_json_url", "https://raw.githubusercontent.com/sudhir-muz/vmbook/main/update.json") ?: "https://raw.githubusercontent.com/sudhir-muz/vmbook/main/update.json")
+    val updateStatus = MutableStateFlow<UpdateStatus>(UpdateStatus.Idle)
+
     val businessProfile = MutableStateFlow<BusinessProfile?>(null)
+
+    // Tally-style Category & Item Master flows
+    val productCategories: StateFlow<List<com.example.data.ProductCategoryEntity>> = repository.allCategories
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val productItems: StateFlow<List<com.example.data.ProductItemEntity>> = repository.allProductItems
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // CRUD operations for Categories
+    fun addCategory(name: String) {
+        viewModelScope.launch {
+            repository.insertCategory(com.example.data.ProductCategoryEntity(name = name))
+        }
+    }
+
+    fun editCategory(category: com.example.data.ProductCategoryEntity, newName: String) {
+        viewModelScope.launch {
+            repository.updateCategory(category.copy(name = newName))
+        }
+    }
+
+    fun deleteCategory(category: com.example.data.ProductCategoryEntity) {
+        viewModelScope.launch {
+            repository.deleteCategory(category)
+        }
+    }
+
+    // CRUD operations for Product Items
+    fun addProductItem(
+        categoryName: String,
+        name: String,
+        hsnCode: String?,
+        defaultSellingRate: Double? = null,
+        defaultDiscountValue: Double? = null,
+        defaultDiscountType: String? = null
+    ) {
+        viewModelScope.launch {
+            repository.insertProductItem(
+                com.example.data.ProductItemEntity(
+                    categoryName = categoryName,
+                    name = name,
+                    hsnCode = hsnCode,
+                    defaultSellingRate = defaultSellingRate,
+                    defaultDiscountValue = defaultDiscountValue,
+                    defaultDiscountType = defaultDiscountType
+                )
+            )
+        }
+    }
+
+    fun editProductItem(
+        item: com.example.data.ProductItemEntity,
+        categoryName: String,
+        name: String,
+        hsnCode: String?,
+        defaultSellingRate: Double?,
+        defaultDiscountValue: Double?,
+        defaultDiscountType: String?
+    ) {
+        viewModelScope.launch {
+            repository.updateProductItem(
+                item.copy(
+                    categoryName = categoryName,
+                    name = name,
+                    hsnCode = hsnCode,
+                    defaultSellingRate = defaultSellingRate,
+                    defaultDiscountValue = defaultDiscountValue,
+                    defaultDiscountType = defaultDiscountType
+                )
+            )
+        }
+    }
+
+    fun deleteProductItem(item: com.example.data.ProductItemEntity) {
+        viewModelScope.launch {
+            repository.deleteProductItem(item)
+        }
+    }
 
     init {
         loadBusinessProfile()
+        seedDefaultCategories()
+        checkForUpdates(manual = false)
+        initNetworkAutoSync()
+    }
+
+    private fun seedDefaultCategories() {
+        viewModelScope.launch {
+            val existing = repository.getAllCategories()
+            if (existing.isEmpty()) {
+                val defaults = listOf("Battery", "Lubricant", "Tyre", "Oil", "Spare Parts", "Accessories")
+                defaults.forEach {
+                    repository.insertCategory(com.example.data.ProductCategoryEntity(name = it))
+                }
+            }
+        }
     }
 
     fun loadBusinessProfile() {
@@ -211,7 +310,7 @@ class BillingViewModel(
     // Raw invoices flow from repository
     val rawInvoices = repository.allInvoices
     val allInvoices: StateFlow<List<InvoiceWithItems>> = repository.allInvoices
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Product calculations and summaries
     val productSummaries: StateFlow<List<ProductSummary>> = allInvoices.map { list ->
@@ -220,15 +319,19 @@ class BillingViewModel(
         
         list.forEach { invWithItems ->
             val type = invWithItems.invoice.type
+            val invSubTotal = invWithItems.items.sumOf { it.totalPrice }
+            val factor = if (invSubTotal > 0.0) invWithItems.invoice.totalAmount / invSubTotal else 1.0
+
             invWithItems.items.forEach { item ->
                 val name = item.name.trim()
                 if (name.isNotEmpty()) {
                     val current = summaries[name] ?: Triple(0.0, 0.0, 0.0)
+                    val effectiveTotalPrice = item.totalPrice * factor
                     if (type == "PURCHASE") {
                         summaries[name] = Triple(
                             current.first + item.quantity,
                             current.second,
-                            current.third + item.totalPrice
+                            current.third + effectiveTotalPrice
                         )
                     } else {
                         summaries[name] = Triple(
@@ -236,7 +339,7 @@ class BillingViewModel(
                             current.second + item.quantity,
                             current.third
                         )
-                        salesVal[name] = (salesVal[name] ?: 0.0) + item.totalPrice
+                        salesVal[name] = (salesVal[name] ?: 0.0) + effectiveTotalPrice
                     }
                 }
             }
@@ -472,59 +575,59 @@ class BillingViewModel(
     }
 
     fun addCustomerSale(customerId: Long, partyName: String, amount: Double, notes: String, date: Long) {
-        val invoiceNo = getNextInvoiceNumber("SALE")
-        val invoice = com.example.data.InvoiceEntity(
-            invoiceNumber = invoiceNo,
-            partyName = partyName,
-            type = "SALE",
-            date = date,
-            discount = 0.0,
-            tax = 0.0,
-            totalAmount = amount,
-            notes = notes,
-            isCreditSale = true,
-            outstandingAmount = amount,
-            dueDate = 0L
-        )
-        val items = listOf(
-            com.example.data.InvoiceItemEntity(
-                invoiceId = 0,
-                name = if (notes.isNotEmpty()) notes else "Given / Credit Sale",
-                price = amount,
-                quantity = 1.0,
-                totalPrice = amount
-            )
-        )
         viewModelScope.launch {
+            val invoiceNo = getNextInvoiceNumber("SALE")
+            val invoice = com.example.data.InvoiceEntity(
+                invoiceNumber = invoiceNo,
+                partyName = partyName,
+                type = "SALE",
+                date = date,
+                discount = 0.0,
+                tax = 0.0,
+                totalAmount = amount,
+                notes = notes,
+                isCreditSale = true,
+                outstandingAmount = amount,
+                dueDate = 0L
+            )
+            val items = listOf(
+                com.example.data.InvoiceItemEntity(
+                    invoiceId = 0,
+                    name = if (notes.isNotEmpty()) notes else "Given / Credit Sale",
+                    price = amount,
+                    quantity = 1.0,
+                    totalPrice = amount
+                )
+            )
             repository.insertInvoiceWithItems(invoice, items)
         }
     }
 
     fun addSupplierPurchase(supplierId: Long, partyName: String, amount: Double, notes: String, date: Long) {
-        val invoiceNo = getNextInvoiceNumber("PURCHASE")
-        val invoice = com.example.data.InvoiceEntity(
-            invoiceNumber = invoiceNo,
-            partyName = partyName,
-            type = "PURCHASE",
-            date = date,
-            discount = 0.0,
-            tax = 0.0,
-            totalAmount = amount,
-            notes = notes,
-            isCreditSale = true,
-            outstandingAmount = amount,
-            dueDate = 0L
-        )
-        val items = listOf(
-            com.example.data.InvoiceItemEntity(
-                invoiceId = 0,
-                name = if (notes.isNotEmpty()) notes else "Purchase Entry / Supplier Invoice",
-                price = amount,
-                quantity = 1.0,
-                totalPrice = amount
-            )
-        )
         viewModelScope.launch {
+            val invoiceNo = getNextInvoiceNumber("PURCHASE")
+            val invoice = com.example.data.InvoiceEntity(
+                invoiceNumber = invoiceNo,
+                partyName = partyName,
+                type = "PURCHASE",
+                date = date,
+                discount = 0.0,
+                tax = 0.0,
+                totalAmount = amount,
+                notes = notes,
+                isCreditSale = true,
+                outstandingAmount = amount,
+                dueDate = 0L
+            )
+            val items = listOf(
+                com.example.data.InvoiceItemEntity(
+                    invoiceId = 0,
+                    name = if (notes.isNotEmpty()) notes else "Purchase Entry / Supplier Invoice",
+                    price = amount,
+                    quantity = 1.0,
+                    totalPrice = amount
+                )
+            )
             repository.insertInvoiceWithItems(invoice, items)
         }
     }
@@ -600,11 +703,15 @@ class BillingViewModel(
 
         chronologicalList.forEach { invoiceWithItems ->
             if (invoiceWithItems.invoice.type == "PURCHASE") {
+                val invSubTotal = invoiceWithItems.items.sumOf { it.totalPrice }
+                val factor = if (invSubTotal > 0.0) invoiceWithItems.invoice.totalAmount / invSubTotal else 1.0
+
                 invoiceWithItems.items.forEach { item ->
                     val name = item.name.trim()
                     if (name.isNotEmpty()) {
+                        val effectiveTotalPrice = item.totalPrice * factor
                         val qty = (productPurchaseQty[name] ?: 0.0) + item.quantity
-                        val totalVal = (productPurchaseVal[name] ?: 0.0) + item.totalPrice
+                        val totalVal = (productPurchaseVal[name] ?: 0.0) + effectiveTotalPrice
                         productPurchaseQty[name] = qty
                         productPurchaseVal[name] = totalVal
                         productAvgPurchasePrice[name] = totalVal / qty
@@ -617,6 +724,7 @@ class BillingViewModel(
         var totalOutstandingCredit = 0.0
         var overdueCreditCount = 0
         var todaySales = 0.0
+        var todayProfit = 0.0
         val now = System.currentTimeMillis()
         val todayCal = java.util.Calendar.getInstance()
         val itemCal = java.util.Calendar.getInstance()
@@ -626,18 +734,18 @@ class BillingViewModel(
                 totalSales += item.invoice.totalAmount
                 salesCount++
 
-                // Calculate today's sales
+                // Calculate profit for this sale
+                val cogs = item.items.sumOf { it.quantity * (productAvgPurchasePrice[it.name.trim()] ?: 0.0) }
+                val profit = item.invoice.totalAmount - cogs
+                totalRealizedProfit += profit
+
+                // Calculate today's sales and profit
                 itemCal.timeInMillis = item.invoice.date
                 if (itemCal.get(java.util.Calendar.YEAR) == todayCal.get(java.util.Calendar.YEAR) &&
                     itemCal.get(java.util.Calendar.DAY_OF_YEAR) == todayCal.get(java.util.Calendar.DAY_OF_YEAR)) {
                     todaySales += item.invoice.totalAmount
+                    todayProfit += profit
                 }
-
-                // Calculate profit for this sale
-                val subTotal = item.items.sumOf { it.totalPrice }
-                val cogs = item.items.sumOf { it.quantity * (productAvgPurchasePrice[it.name.trim()] ?: 0.0) }
-                val profit = (subTotal - item.invoice.discount) - cogs
-                totalRealizedProfit += profit
 
                 if (item.invoice.isCreditSale && item.invoice.outstandingAmount > 0) {
                     totalOutstandingCredit += item.invoice.outstandingAmount
@@ -652,27 +760,35 @@ class BillingViewModel(
         }
 
         // Calculate remaining stock value using actual stock balance logic
-        val productGroups = mutableMapOf<String, MutableList<Pair<String, InvoiceItemEntity>>>()
+        data class TempHistoryItem(val type: String, val quantity: Double, val effectiveTotalPrice: Double)
+        
+        val productGroups = mutableMapOf<String, MutableList<TempHistoryItem>>()
         list.forEach { invoiceWithItems ->
             val type = invoiceWithItems.invoice.type
+            val invSubTotal = invoiceWithItems.items.sumOf { it.totalPrice }
+            val factor = if (invSubTotal > 0.0) invoiceWithItems.invoice.totalAmount / invSubTotal else 1.0
+            
             invoiceWithItems.items.forEach { item ->
                 val normalizedName = item.name.trim()
                 if (normalizedName.isNotEmpty()) {
-                    productGroups.getOrPut(normalizedName) { mutableListOf() }.add(type to item)
+                    val effectiveTotalPrice = item.totalPrice * factor
+                    productGroups.getOrPut(normalizedName) { mutableListOf() }.add(
+                        TempHistoryItem(type, item.quantity, effectiveTotalPrice)
+                    )
                 }
             }
         }
 
         var remainingStockValue = 0.0
         productGroups.forEach { (name, history) ->
-            val purchases = history.filter { it.first == "PURCHASE" }.map { it.second }
-            val sales = history.filter { it.first == "SALE" }.map { it.second }
+            val purchases = history.filter { it.type == "PURCHASE" }
+            val sales = history.filter { it.type == "SALE" }
 
             val qtyPurchased = purchases.sumOf { it.quantity }
-            val totalPurchaseValue = purchases.sumOf { it.totalPrice }
+            val totalPurchaseValue = purchases.sumOf { it.effectiveTotalPrice }
             val avgPurchasePrice = if (qtyPurchased > 0) totalPurchaseValue / qtyPurchased else {
                 val qtySold = sales.sumOf { it.quantity }
-                if (qtySold > 0) sales.sumOf { it.totalPrice } / qtySold else 0.0
+                if (qtySold > 0) sales.sumOf { it.effectiveTotalPrice } / qtySold else 0.0
             }
 
             val qtySold = sales.sumOf { it.quantity }
@@ -692,7 +808,8 @@ class BillingViewModel(
             remainingStockValue = remainingStockValue,
             totalOutstandingCredit = totalOutstandingCredit,
             overdueCreditInvoicesCount = overdueCreditCount,
-            todaySales = todaySales
+            todaySales = todaySales,
+            todayProfit = todayProfit
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DashboardStats())
 
@@ -707,11 +824,15 @@ class BillingViewModel(
 
         chronologicalList.forEach { invoiceWithItems ->
             if (invoiceWithItems.invoice.type == "PURCHASE") {
+                val invSubTotal = invoiceWithItems.items.sumOf { it.totalPrice }
+                val factor = if (invSubTotal > 0.0) invoiceWithItems.invoice.totalAmount / invSubTotal else 1.0
+
                 invoiceWithItems.items.forEach { item ->
                     val name = item.name.trim()
                     if (name.isNotEmpty()) {
+                        val effectiveTotalPrice = item.totalPrice * factor
                         val qty = (productPurchaseQty[name] ?: 0.0) + item.quantity
-                        val totalVal = (productPurchaseVal[name] ?: 0.0) + item.totalPrice
+                        val totalVal = (productPurchaseVal[name] ?: 0.0) + effectiveTotalPrice
                         productPurchaseQty[name] = qty
                         productPurchaseVal[name] = totalVal
                         productAvgPurchasePrice[name] = totalVal / qty
@@ -727,9 +848,8 @@ class BillingViewModel(
             val purchaseAmount = if (!isSale) item.invoice.totalAmount else null
 
             val rowProfitLoss = if (isSale) {
-                val subTotal = item.items.sumOf { it.totalPrice }
                 val cogs = item.items.sumOf { it.quantity * (productAvgPurchasePrice[it.name.trim()] ?: 0.0) }
-                (subTotal - item.invoice.discount) - cogs
+                item.invoice.totalAmount - cogs
             } else {
                 0.0
             }
@@ -749,26 +869,34 @@ class BillingViewModel(
 
     // Stock Balance Flow
     val stockBalances: StateFlow<List<StockItem>> = rawInvoices.combine(MutableStateFlow(0)) { list, _ ->
-        val productGroups = mutableMapOf<String, MutableList<Pair<String, InvoiceItemEntity>>>() // name -> list of (Type, Item)
+        data class TempHistoryItem(val type: String, val quantity: Double, val effectiveTotalPrice: Double)
+        
+        val productGroups = mutableMapOf<String, MutableList<TempHistoryItem>>()
         list.forEach { invoiceWithItems ->
             val type = invoiceWithItems.invoice.type
+            val invSubTotal = invoiceWithItems.items.sumOf { it.totalPrice }
+            val factor = if (invSubTotal > 0.0) invoiceWithItems.invoice.totalAmount / invSubTotal else 1.0
+            
             invoiceWithItems.items.forEach { item ->
                 val normalizedName = item.name.trim()
                 if (normalizedName.isNotEmpty()) {
-                    productGroups.getOrPut(normalizedName) { mutableListOf() }.add(type to item)
+                    val effectiveTotalPrice = item.totalPrice * factor
+                    productGroups.getOrPut(normalizedName) { mutableListOf() }.add(
+                        TempHistoryItem(type, item.quantity, effectiveTotalPrice)
+                    )
                 }
             }
         }
 
         productGroups.map { (name, history) ->
-            val purchases = history.filter { it.first == "PURCHASE" }.map { it.second }
-            val sales = history.filter { it.first == "SALE" }.map { it.second }
+            val purchases = history.filter { it.type == "PURCHASE" }
+            val sales = history.filter { it.type == "SALE" }
 
             val qtyPurchased = purchases.sumOf { it.quantity }
-            val totalPurchaseValue = purchases.sumOf { it.totalPrice }
+            val totalPurchaseValue = purchases.sumOf { it.effectiveTotalPrice }
             val avgPurchasePrice = if (qtyPurchased > 0) totalPurchaseValue / qtyPurchased else {
                 val qtySold = sales.sumOf { it.quantity }
-                if (qtySold > 0) sales.sumOf { it.totalPrice } / qtySold else 0.0
+                if (qtySold > 0) sales.sumOf { it.effectiveTotalPrice } / qtySold else 0.0
             }
 
             val qtySold = sales.sumOf { it.quantity }
@@ -841,33 +969,34 @@ class BillingViewModel(
         setScreen(BillingScreen.INVOICE_DETAIL)
     }
 
-    fun getNextInvoiceNumber(type: String): String {
+    suspend fun getNextInvoiceNumber(type: String): String {
         val prefix = if (type == "SALE") "INV-" else "PUR-"
-        val existingInvoices = allInvoices.value
-        
-        var maxNum = 0
-        existingInvoices.forEach { item ->
-            val numStr = item.invoice.invoiceNumber
-            if (numStr.startsWith(prefix, ignoreCase = true)) {
-                val suffix = numStr.substring(prefix.length)
-                val parsed = suffix.toIntOrNull()
-                if (parsed != null && parsed > maxNum) {
-                    maxNum = parsed
+        val existingNumbers = repository.getInvoiceNumbersByType(type)
+        var maxInTable = 0
+        for (num in existingNumbers) {
+            if (num.startsWith(prefix, ignoreCase = true)) {
+                val suffixStr = num.substring(prefix.length)
+                val parsed = suffixStr.toIntOrNull()
+                if (parsed != null && parsed > maxInTable) {
+                    maxInTable = parsed
                 }
             }
         }
-        val nextNum = maxNum + 1
-        return "$prefix${String.format(Locale.US, "%04d", nextNum)}"
+        val storedLastVal = repository.getLastSequenceValue(type) ?: 0
+        val nextId = maxOf(maxInTable, storedLastVal) + 1
+        return "$prefix${String.format(Locale.US, "%04d", nextId)}"
     }
 
     fun updateFormType(type: String) {
         formType.value = type
-        formInvoiceNumber.value = if (type == "SALE") getNextInvoiceNumber(type) else ""
+        viewModelScope.launch {
+            formInvoiceNumber.value = if (type == "SALE") getNextInvoiceNumber(type) else ""
+        }
     }
 
     fun prepareNewInvoiceForm() {
         formPartyName.value = ""
-        formInvoiceNumber.value = if (formType.value == "SALE") getNextInvoiceNumber(formType.value) else ""
+        formInvoiceNumber.value = ""
         formDate.value = System.currentTimeMillis()
         formDiscount.value = ""
         formTax.value = ""
@@ -878,6 +1007,9 @@ class BillingViewModel(
         formOutstandingAmount.value = ""
         formDueDate.value = System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000L
         formErrorMessage.value = null
+        viewModelScope.launch {
+            formInvoiceNumber.value = if (formType.value == "SALE") getNextInvoiceNumber(formType.value) else ""
+        }
         setScreen(BillingScreen.ADD_INVOICE)
     }
 
@@ -935,7 +1067,8 @@ class BillingViewModel(
 
         // Parse lines
         val finalItems = mutableListOf<InvoiceItemEntity>()
-        var subTotal = 0.0
+        var totalAmountBeforeDiscount = 0.0
+        var totalDiscount = 0.0
 
         for (draft in formItems) {
             val itemName = draft.name.trim()
@@ -953,8 +1086,21 @@ class BillingViewModel(
                 return false
             }
 
-            val lineTotal = priceVal * qtyVal
-            subTotal += lineTotal
+            val itemDiscountVal = draft.discount.toDoubleOrNull() ?: 0.0
+            if (itemDiscountVal < 0) {
+                formErrorMessage.value = "Discount cannot be negative for '$itemName'"
+                return false
+            }
+
+            val itemTotalBeforeDiscount = priceVal * qtyVal
+            if (itemDiscountVal > itemTotalBeforeDiscount) {
+                formErrorMessage.value = "Discount exceeds item amount for '$itemName'"
+                return false
+            }
+
+            val taxableAmount = itemTotalBeforeDiscount - itemDiscountVal
+            totalAmountBeforeDiscount += itemTotalBeforeDiscount
+            totalDiscount += itemDiscountVal
 
             finalItems.add(
                 InvoiceItemEntity(
@@ -962,7 +1108,9 @@ class BillingViewModel(
                     name = itemName,
                     price = priceVal,
                     quantity = qtyVal,
-                    totalPrice = lineTotal
+                    totalPrice = taxableAmount,
+                    hsnCode = draft.hsnCode.ifBlank { null },
+                    discount = itemDiscountVal
                 )
             )
         }
@@ -973,8 +1121,9 @@ class BillingViewModel(
         }
 
         // Calculations
-        val taxAmount = subTotal * (taxPercentage / 100.0)
-        val grandTotal = subTotal + taxAmount - discountVal
+        val taxableAmountSum = totalAmountBeforeDiscount - totalDiscount
+        val taxAmount = taxableAmountSum * (taxPercentage / 100.0)
+        val grandTotal = taxableAmountSum + taxAmount
 
         if (grandTotal < 0) {
             formErrorMessage.value = "Discount exceeds total value of items"
@@ -994,7 +1143,7 @@ class BillingViewModel(
             partyName = party,
             type = type,
             date = formDate.value,
-            discount = discountVal,
+            discount = totalDiscount,
             tax = taxPercentage,
             totalAmount = grandTotal,
             notes = notes,
@@ -1025,6 +1174,46 @@ class BillingViewModel(
     fun updateInvoiceOutstandingAmount(invoiceId: Long, outstandingAmount: Double) {
         viewModelScope.launch {
             repository.updateOutstandingAmount(invoiceId, outstandingAmount)
+        }
+    }
+
+    fun addCustomerPaymentWithInvoiceUpdate(
+        partyName: String,
+        paymentAmount: Double,
+        invoiceId: Long,
+        newOutstandingAmount: Double,
+        date: Long,
+        paymentMode: String,
+        referenceNo: String,
+        notes: String
+    ) {
+        viewModelScope.launch {
+            // Find or create customer
+            val existingCust = repository.allCustomers.first().find { 
+                it.name.trim().equals(partyName.trim(), ignoreCase = true) 
+            }
+            val customerId = existingCust?.id ?: repository.insertCustomer(
+                com.example.data.CustomerEntity(
+                    name = partyName.trim(),
+                    phone = "",
+                    address = ""
+                )
+            )
+            
+            // Insert customer payment
+            repository.insertCustomerPayment(
+                com.example.data.CustomerPaymentEntity(
+                    customerId = customerId,
+                    amount = paymentAmount,
+                    date = date,
+                    paymentMode = paymentMode,
+                    referenceNo = referenceNo,
+                    notes = notes
+                )
+            )
+            
+            // Update invoice outstanding amount
+            repository.updateOutstandingAmount(invoiceId, newOutstandingAmount)
         }
     }
 
@@ -1250,6 +1439,70 @@ class BillingViewModel(
         sharedPrefs.edit().putBoolean("transaction_fingerprint_enabled", enabled).apply()
     }
 
+    // --- ADDITIONAL SETTINGS SUPPORT ---
+    val themeMode = MutableStateFlow(sharedPrefs.getString("theme_mode", "system") ?: "system")
+    fun getThemeMode(): String = themeMode.value
+    fun setThemeMode(mode: String) {
+        sharedPrefs.edit().putString("theme_mode", mode).apply()
+        themeMode.value = mode
+    }
+
+    val dateFormatPref = MutableStateFlow(sharedPrefs.getString("date_format_pref", "dd MMM yyyy") ?: "dd MMM yyyy")
+    fun getDateFormatPref(): String = dateFormatPref.value
+    fun setDateFormatPref(format: String) {
+        sharedPrefs.edit().putString("date_format_pref", format).apply()
+        dateFormatPref.value = format
+    }
+
+    val currencyPref = MutableStateFlow(sharedPrefs.getString("currency_pref", "₹") ?: "₹")
+    fun getCurrencyPref(): String = currencyPref.value
+    fun setCurrencyPref(currency: String) {
+        sharedPrefs.edit().putString("currency_pref", currency).apply()
+        currencyPref.value = currency
+    }
+
+    val languagePref = MutableStateFlow(sharedPrefs.getString("language_pref", "en") ?: "en")
+    fun getLanguagePref(): String = languagePref.value
+    fun setLanguagePref(language: String) {
+        sharedPrefs.edit().putString("language_pref", language).apply()
+        languagePref.value = language
+    }
+
+    val paymentReminderEnabled = MutableStateFlow(sharedPrefs.getBoolean("payment_reminder_enabled", true))
+    fun isPaymentReminderEnabled(): Boolean = paymentReminderEnabled.value
+    fun setPaymentReminderEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("payment_reminder_enabled", enabled).apply()
+        paymentReminderEnabled.value = enabled
+    }
+
+    val creditReminderEnabled = MutableStateFlow(sharedPrefs.getBoolean("credit_reminder_enabled", true))
+    fun isCreditReminderEnabled(): Boolean = creditReminderEnabled.value
+    fun setCreditReminderEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("credit_reminder_enabled", enabled).apply()
+        creditReminderEnabled.value = enabled
+    }
+
+    val dueDateReminderEnabled = MutableStateFlow(sharedPrefs.getBoolean("due_date_reminder_enabled", true))
+    fun isDueDateReminderEnabled(): Boolean = dueDateReminderEnabled.value
+    fun setDueDateReminderEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("due_date_reminder_enabled", enabled).apply()
+        dueDateReminderEnabled.value = enabled
+    }
+
+    val defaultGstRate = MutableStateFlow(sharedPrefs.getFloat("default_gst_rate", 18f))
+    fun getDefaultGstRate(): Float = defaultGstRate.value
+    fun setDefaultGstRate(rate: Float) {
+        sharedPrefs.edit().putFloat("default_gst_rate", rate).apply()
+        defaultGstRate.value = rate
+    }
+
+    val gstBillingEnabled = MutableStateFlow(sharedPrefs.getBoolean("gst_billing_enabled", true))
+    fun isGstBillingEnabled(): Boolean = gstBillingEnabled.value
+    fun setGstBillingEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("gst_billing_enabled", enabled).apply()
+        gstBillingEnabled.value = enabled
+    }
+
     fun adjustStock(productName: String, qtyChange: Double, reason: String) {
         viewModelScope.launch {
             val rand = (1000..9999).random()
@@ -1299,6 +1552,625 @@ class BillingViewModel(
             }
         }
     }
+
+    fun getUpdateJsonUrl(): String = updateJsonUrl.value
+    fun setUpdateJsonUrl(url: String) {
+        sharedPrefs.edit().putString("update_json_url", url).apply()
+        updateJsonUrl.value = url
+    }
+
+    fun checkForUpdates(manual: Boolean = false) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            updateStatus.value = UpdateStatus.Checking
+            try {
+                val urlString = updateJsonUrl.value
+                if (urlString.isBlank()) {
+                    if (manual) {
+                        updateStatus.value = UpdateStatus.Error("Update check URL is empty")
+                    } else {
+                        updateStatus.value = UpdateStatus.Idle
+                    }
+                    return@launch
+                }
+                
+                val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 10000
+                connection.readTimeout = 10000
+                connection.requestMethod = "GET"
+                connection.connect()
+                
+                if (connection.responseCode != 200) {
+                    if (manual) {
+                        updateStatus.value = UpdateStatus.Error("Server returned code ${connection.responseCode}")
+                    } else {
+                        updateStatus.value = UpdateStatus.Idle
+                    }
+                    return@launch
+                }
+                
+                val text = connection.inputStream.bufferedReader().use { it.readText() }
+                val json = org.json.JSONObject(text)
+                
+                val remoteVersionCode = json.optLong("versionCode", 0L)
+                val remoteVersionName = json.optString("versionName", "")
+                val forceUpdate = json.optBoolean("forceUpdate", false)
+                val apkUrl = json.optString("apkUrl", "")
+                val whatsNew = json.optString("whatsNew", "")
+                
+                val packageInfo = application.packageManager.getPackageInfo(application.packageName, 0)
+                val currentVersionName = packageInfo.versionName ?: "1.0.0"
+                val currentVersionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                    packageInfo.longVersionCode
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageInfo.versionCode.toLong()
+                }
+                
+                val isUpdateAvailable = if (remoteVersionCode > 0L) {
+                    remoteVersionCode > currentVersionCode
+                } else {
+                    compareVersions(remoteVersionName, currentVersionName) > 0
+                }
+                
+                if (isUpdateAvailable) {
+                    updateStatus.value = UpdateStatus.NewUpdateAvailable(
+                        currentVersion = currentVersionName,
+                        latestVersion = remoteVersionName,
+                        whatsNew = whatsNew,
+                        apkUrl = apkUrl,
+                        forceUpdate = forceUpdate
+                    )
+                } else {
+                    if (manual) {
+                        updateStatus.value = UpdateStatus.Error("App is up-to-date")
+                    } else {
+                        updateStatus.value = UpdateStatus.Idle
+                    }
+                }
+            } catch (e: Exception) {
+                if (manual) {
+                    updateStatus.value = UpdateStatus.Error(e.localizedMessage ?: "Unknown network error")
+                } else {
+                    updateStatus.value = UpdateStatus.Idle
+                }
+            }
+        }
+    }
+
+    private fun compareVersions(v1: String, v2: String): Int {
+        val parts1 = v1.split(".").mapNotNull { it.toIntOrNull() }
+        val parts2 = v2.split(".").mapNotNull { it.toIntOrNull() }
+        val maxLength = maxOf(parts1.size, parts2.size)
+        for (i in 0 until maxLength) {
+            val p1 = parts1.getOrElse(i) { 0 }
+            val p2 = parts2.getOrElse(i) { 0 }
+            if (p1 != p2) {
+                return p1.compareTo(p2)
+            }
+        }
+        return 0
+    }
+
+    fun dismissUpdateDialog() {
+        updateStatus.value = UpdateStatus.Idle
+    }
+
+    fun downloadAndInstallApk(apkUrl: String) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            updateStatus.value = UpdateStatus.Downloading(0f)
+            try {
+                val connection = java.net.URL(apkUrl).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 15000
+                connection.readTimeout = 15000
+                connection.connect()
+                
+                if (connection.responseCode != 200) {
+                    updateStatus.value = UpdateStatus.Error("Failed to download APK. Server returned code ${connection.responseCode}")
+                    return@launch
+                }
+                
+                val fileLength = connection.contentLength
+                val input = connection.inputStream
+                
+                val apkFile = java.io.File(application.getExternalFilesDir(null) ?: application.cacheDir, "update.apk")
+                if (apkFile.exists()) {
+                    apkFile.delete()
+                }
+                val output = java.io.FileOutputStream(apkFile)
+                
+                val data = ByteArray(4096)
+                var total: Long = 0
+                var count: Int
+                while (input.read(data).also { count = it } != -1) {
+                    total += count
+                    if (fileLength > 0) {
+                        val progress = total.toFloat() / fileLength
+                        updateStatus.value = UpdateStatus.Downloading(progress)
+                    }
+                    output.write(data, 0, count)
+                }
+                
+                output.flush()
+                output.close()
+                input.close()
+                
+                updateStatus.value = UpdateStatus.DownloadCompleted(apkFile)
+            } catch (e: Exception) {
+                updateStatus.value = UpdateStatus.Error("Download failed: ${e.localizedMessage}")
+            }
+        }
+    }
+
+    // --- CLOUD SYNC & MULTI-DEVICE SUPPORT ---
+    val cloudUserMobile = MutableStateFlow(sharedPrefs.getString("cloud_user_mobile", "") ?: "")
+    val cloudServerUrl = MutableStateFlow(sharedPrefs.getString("cloud_server_url", "https://api.vmbook.app") ?: "https://api.vmbook.app")
+    val isCloudSandboxEnabled = MutableStateFlow(sharedPrefs.getBoolean("cloud_sandbox_enabled", true))
+    val isSyncing = MutableStateFlow(false)
+    val lastSyncTime = MutableStateFlow(sharedPrefs.getLong("last_sync_time", 0L))
+    val syncStatusMessage = MutableStateFlow<String?>(null)
+
+    // Login screen states
+    val loginStep = MutableStateFlow(0) // 0 = Enter Mobile, 1 = Enter OTP
+    val loginMobileInput = MutableStateFlow("")
+    val loginOtpInput = MutableStateFlow("")
+    val loginError = MutableStateFlow<String?>(null)
+    private var generatedOtp = ""
+
+    fun sendCloudOtp(mobile: String) {
+        if (mobile.trim().length < 10) {
+            loginError.value = "Please enter a valid 10-digit mobile number"
+            return
+        }
+        loginError.value = null
+        val code = (100000..999999).random().toString()
+        generatedOtp = code
+        loginStep.value = 1
+        android.widget.Toast.makeText(application, "SECURE OTP: $code (Simulation)", android.widget.Toast.LENGTH_LONG).show()
+    }
+
+    fun verifyCloudOtp(otp: String) {
+        if (otp != generatedOtp) {
+            loginError.value = "Incorrect OTP. Please try again."
+            return
+        }
+        loginError.value = null
+        val mobile = loginMobileInput.value.trim()
+        sharedPrefs.edit().putString("cloud_user_mobile", mobile).apply()
+        cloudUserMobile.value = mobile
+        loginStep.value = 0
+        loginMobileInput.value = ""
+        loginOtpInput.value = ""
+
+        // Automatic initial sync to pull remote data on new device
+        performCloudRestore(isAutoSync = true)
+    }
+
+    fun logoutCloud() {
+        sharedPrefs.edit().remove("cloud_user_mobile").apply()
+        cloudUserMobile.value = ""
+        loginStep.value = 0
+        loginMobileInput.value = ""
+        loginOtpInput.value = ""
+        loginError.value = null
+    }
+
+    fun setCloudSandboxEnabled(enabled: Boolean) {
+        sharedPrefs.edit().putBoolean("cloud_sandbox_enabled", enabled).apply()
+        isCloudSandboxEnabled.value = enabled
+    }
+
+    fun setCloudServerUrl(url: String) {
+        sharedPrefs.edit().putString("cloud_server_url", url).apply()
+        cloudServerUrl.value = url
+    }
+
+    // Automatically check connectivity and trigger sync
+    fun initNetworkAutoSync() {
+        val cm = application.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        if (cm != null) {
+            try {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                    cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: android.net.Network) {
+                            if (cloudUserMobile.value.isNotEmpty()) {
+                                performCloudBackup(isAutoSync = true)
+                            }
+                        }
+                    })
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun performCloudBackup(isAutoSync: Boolean = false) {
+        val mobile = cloudUserMobile.value
+        if (mobile.isEmpty()) return
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            isSyncing.value = true
+            syncStatusMessage.value = if (isAutoSync) "Auto-syncing..." else "Creating cloud backup..."
+            try {
+                // Fetch all data from database tables
+                val customers = repository.getAllCustomersList()
+                val customerPayments = repository.getAllCustomerPaymentsList()
+                val suppliers = repository.getAllSuppliersList()
+                val supplierPayments = repository.getAllSupplierPaymentsList()
+                val categories = repository.getAllCategories()
+                val items = repository.getAllProductItems()
+                val invoices = repository.getAllInvoicesList()
+                val invoiceItems = repository.getAllInvoiceItemsList()
+                val sequences = repository.getAllInvoiceSequencesList()
+
+                // Package settings from SharedPreferences
+                val settingsKeys = listOf(
+                    "firm_name", "mobile_number", "address", "gstin", "email",
+                    "default_invoice_prefix", "default_invoice_terms", "theme_mode",
+                    "date_format_pref", "currency_pref", "language_pref", "default_gst_rate",
+                    "gst_billing_enabled", "payment_reminder_enabled", "credit_reminder_enabled", "due_date_reminder_enabled"
+                )
+                val settingsMap = settingsKeys.associateWith { key ->
+                    sharedPrefs.all[key]
+                }
+
+                val payload = com.example.data.CloudSyncService.serializePayload(
+                    customers, customerPayments, suppliers, supplierPayments,
+                    categories, items, invoices, invoiceItems, sequences, settingsMap
+                )
+
+                val success = if (isCloudSandboxEnabled.value) {
+                    com.example.data.CloudSyncService.saveToSandbox(application, mobile, payload)
+                    true
+                } else {
+                    com.example.data.CloudSyncService.uploadToCloud(cloudServerUrl.value, mobile, payload)
+                }
+
+                if (success) {
+                    val time = System.currentTimeMillis()
+                    sharedPrefs.edit().putLong("last_sync_time", time).apply()
+                    lastSyncTime.value = time
+                    syncStatusMessage.value = "Backup sync completed successfully"
+                } else {
+                    syncStatusMessage.value = "Failed to sync: Cloud Server unreachable"
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                syncStatusMessage.value = "Sync failed: ${e.localizedMessage}"
+            } finally {
+                isSyncing.value = false
+            }
+        }
+    }
+
+    fun performCloudRestore(isAutoSync: Boolean = false) {
+        val mobile = cloudUserMobile.value
+        if (mobile.isEmpty()) return
+
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            isSyncing.value = true
+            syncStatusMessage.value = "Restoring data from cloud..."
+            try {
+                val payloadText = if (isCloudSandboxEnabled.value) {
+                    com.example.data.CloudSyncService.loadFromSandbox(application, mobile)
+                } else {
+                    com.example.data.CloudSyncService.downloadFromCloud(cloudServerUrl.value, mobile)
+                }
+
+                if (payloadText == null || payloadText.trim().isEmpty()) {
+                    syncStatusMessage.value = "No existing cloud backup found for this account"
+                    isSyncing.value = false
+                    return@launch
+                }
+
+                val root = org.json.JSONObject(payloadText)
+
+                // 1. Restore Categories & Products
+                val catArray = root.optJSONArray("categories") ?: org.json.JSONArray()
+                val localCats = repository.getAllCategories()
+                val catNameToIdMap = localCats.associate { it.name to it.id }.toMutableMap()
+                for (i in 0 until catArray.length()) {
+                    val obj = catArray.getJSONObject(i)
+                    val name = obj.getString("name")
+                    if (!catNameToIdMap.containsKey(name)) {
+                        repository.insertCategory(com.example.data.ProductCategoryEntity(name = name))
+                    }
+                }
+                // Refresh categories map
+                repository.getAllCategories().forEach { catNameToIdMap[it.name] = it.id }
+
+                val itemArray = root.optJSONArray("items") ?: org.json.JSONArray()
+                val localItems = repository.getAllProductItems()
+                val itemKeys = localItems.map { "${it.name}_${it.categoryName}" }.toSet()
+                for (i in 0 until itemArray.length()) {
+                    val obj = itemArray.getJSONObject(i)
+                    val name = obj.getString("name")
+                    val catName = obj.getString("categoryName")
+                    val hsnCode = obj.optString("hsnCode", "")
+                    val defaultSellingRate = if (obj.has("defaultSellingRate")) obj.getDouble("defaultSellingRate") else null
+                    val defaultDiscountValue = if (obj.has("defaultDiscountValue")) obj.getDouble("defaultDiscountValue") else null
+                    val defaultDiscountType = if (obj.has("defaultDiscountType")) obj.getString("defaultDiscountType") else null
+                    val key = "${name}_$catName"
+                    if (!itemKeys.contains(key)) {
+                        repository.insertProductItem(com.example.data.ProductItemEntity(
+                            name = name,
+                            categoryName = catName,
+                            hsnCode = if (hsnCode.isEmpty()) null else hsnCode,
+                            defaultSellingRate = defaultSellingRate,
+                            defaultDiscountValue = defaultDiscountValue,
+                            defaultDiscountType = defaultDiscountType
+                        ))
+                    }
+                }
+
+                // 2. Restore Customers & Supplier profiles
+                val custArray = root.optJSONArray("customers") ?: org.json.JSONArray()
+                val localCusts = repository.getAllCustomersList()
+                val custToIdMap = localCusts.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}" }.mapValues { it.value.id }.toMutableMap()
+                val remoteToLocalCustIdMap = mutableMapOf<Long, Long>()
+
+                for (i in 0 until custArray.length()) {
+                    val obj = custArray.getJSONObject(i)
+                    val rId = obj.getLong("id")
+                    val name = obj.getString("name")
+                    val phone = obj.optString("phone", "")
+                    val email = obj.optString("email", "")
+                    val address = obj.optString("address", "")
+                    val notes = obj.optString("notes", "")
+
+                    val key = "${name.trim().lowercase()}_${phone.trim()}"
+                    var lId = custToIdMap[key]
+                    if (lId == null) {
+                        lId = repository.insertCustomer(com.example.data.CustomerEntity(
+                            name = name,
+                            phone = phone,
+                            email = email,
+                            address = address,
+                            notes = notes
+                        ))
+                        custToIdMap[key] = lId
+                    }
+                    remoteToLocalCustIdMap[rId] = lId
+                }
+
+                val suppArray = root.optJSONArray("suppliers") ?: org.json.JSONArray()
+                val localSupps = repository.getAllSuppliersList()
+                val suppToIdMap = localSupps.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}" }.mapValues { it.value.id }.toMutableMap()
+                val remoteToLocalSuppIdMap = mutableMapOf<Long, Long>()
+
+                for (i in 0 until suppArray.length()) {
+                    val obj = suppArray.getJSONObject(i)
+                    val rId = obj.getLong("id")
+                    val name = obj.getString("name")
+                    val phone = obj.optString("phone", "")
+                    val email = obj.optString("email", "")
+                    val address = obj.optString("address", "")
+                    val notes = obj.optString("notes", "")
+
+                    val key = "${name.trim().lowercase()}_${phone.trim()}"
+                    var lId = suppToIdMap[key]
+                    if (lId == null) {
+                        lId = repository.insertSupplier(com.example.data.SupplierEntity(
+                            name = name,
+                            phone = phone,
+                            email = email,
+                            address = address,
+                            notes = notes
+                        ))
+                        suppToIdMap[key] = lId
+                    }
+                    remoteToLocalSuppIdMap[rId] = lId
+                }
+
+                // 3. Restore Customer and Supplier Payments
+                val custPayArray = root.optJSONArray("customerPayments") ?: org.json.JSONArray()
+                val localCustPayments = repository.getAllCustomerPaymentsList()
+                val custPayKeys = localCustPayments.map { "${it.customerId}_${it.amount}_${it.date}" }.toSet()
+                for (i in 0 until custPayArray.length()) {
+                    val obj = custPayArray.getJSONObject(i)
+                    val rCustId = obj.getLong("customerId")
+                    val lCustId = remoteToLocalCustIdMap[rCustId] ?: continue
+                    val amount = obj.getDouble("amount")
+                    val date = obj.getLong("date")
+                    val payMode = obj.optString("paymentMode", "Cash")
+                    val refNo = obj.optString("referenceNo", "")
+                    val notes = obj.optString("notes", "")
+
+                    val key = "${lCustId}_${amount}_$date"
+                    if (!custPayKeys.contains(key)) {
+                        repository.insertCustomerPayment(com.example.data.CustomerPaymentEntity(
+                            customerId = lCustId,
+                            amount = amount,
+                            date = date,
+                            paymentMode = payMode,
+                            referenceNo = refNo,
+                            notes = notes
+                        ))
+                    }
+                }
+
+                val suppPayArray = root.optJSONArray("supplierPayments") ?: org.json.JSONArray()
+                val localSuppPayments = repository.getAllSupplierPaymentsList()
+                val suppPayKeys = localSuppPayments.map { "${it.supplierId}_${it.amount}_${it.date}" }.toSet()
+                for (i in 0 until suppPayArray.length()) {
+                    val obj = suppPayArray.getJSONObject(i)
+                    val rSuppId = obj.getLong("supplierId")
+                    val lSuppId = remoteToLocalSuppIdMap[rSuppId] ?: continue
+                    val amount = obj.getDouble("amount")
+                    val date = obj.getLong("date")
+                    val payMode = obj.optString("paymentMode", "Cash")
+                    val refNo = obj.optString("referenceNo", "")
+                    val notes = obj.optString("notes", "")
+
+                    val key = "${lSuppId}_${amount}_$date"
+                    if (!suppPayKeys.contains(key)) {
+                        repository.insertSupplierPayment(com.example.data.SupplierPaymentEntity(
+                            supplierId = lSuppId,
+                            amount = amount,
+                            date = date,
+                            paymentMode = payMode,
+                            referenceNo = refNo,
+                            notes = notes
+                        ))
+                    }
+                }
+
+                // 4. Restore Invoices & Items
+                val invArray = root.optJSONArray("invoices") ?: org.json.JSONArray()
+                val localInvoices = repository.getAllInvoicesList()
+                val localInvNos = localInvoices.associateBy { it.invoiceNumber }
+                val remoteToLocalInvIdMap = mutableMapOf<Long, Long>()
+
+                for (i in 0 until invArray.length()) {
+                    val obj = invArray.getJSONObject(i)
+                    val rId = obj.getLong("id")
+                    val number = obj.getString("invoiceNumber")
+                    val party = obj.getString("partyName")
+                    val type = obj.getString("type")
+                    val date = obj.optLong("date", System.currentTimeMillis())
+                    val discount = obj.optDouble("discount", 0.0)
+                    val tax = obj.optDouble("tax", 0.0)
+                    val total = obj.optDouble("totalAmount", 0.0)
+                    val notes = obj.optString("notes", "")
+                    val credit = obj.optBoolean("isCreditSale", false)
+                    val outstanding = obj.optDouble("outstandingAmount", 0.0)
+                    val dueDate = obj.optLong("dueDate", 0L)
+
+                    var existing = localInvNos[number]
+                    if (existing == null) {
+                        // Create invoice directly to get custom invoiceNumber
+                        val newId = com.example.data.AppDatabase.getDatabase(application).invoiceDao().insertInvoice(
+                            com.example.data.InvoiceEntity(
+                                invoiceNumber = number,
+                                partyName = party,
+                                type = type,
+                                date = date,
+                                discount = discount,
+                                tax = tax,
+                                totalAmount = total,
+                                notes = notes,
+                                isCreditSale = credit,
+                                outstandingAmount = outstanding,
+                                dueDate = dueDate
+                            )
+                        )
+                        remoteToLocalInvIdMap[rId] = newId
+                    } else {
+                        remoteToLocalInvIdMap[rId] = existing.id
+                    }
+                }
+
+                val invItemsArray = root.optJSONArray("invoiceItems") ?: org.json.JSONArray()
+                val localInvItems = repository.getAllInvoiceItemsList()
+                val localInvItemKeys = localInvItems.map { "${it.invoiceId}_${it.name}_${it.quantity}_${it.totalPrice}" }.toSet()
+                val itemsToInsert = mutableListOf<com.example.data.InvoiceItemEntity>()
+
+                for (i in 0 until invItemsArray.length()) {
+                    val obj = invItemsArray.getJSONObject(i)
+                    val rInvId = obj.getLong("invoiceId")
+                    val lInvId = remoteToLocalInvIdMap[rInvId] ?: continue
+                    val name = obj.getString("name")
+                    val price = obj.getDouble("price")
+                    val qty = obj.getDouble("quantity")
+                    val total = obj.getDouble("totalPrice")
+                    val hsn = obj.optString("hsnCode", "")
+
+                    val key = "${lInvId}_${name}_${qty}_$total"
+                    if (!localInvItemKeys.contains(key)) {
+                        itemsToInsert.add(com.example.data.InvoiceItemEntity(
+                            invoiceId = lInvId,
+                            name = name,
+                            price = price,
+                            quantity = qty,
+                            totalPrice = total,
+                            hsnCode = if (hsn.isEmpty()) null else hsn
+                        ))
+                    }
+                }
+                if (itemsToInsert.isNotEmpty()) {
+                    repository.insertInvoiceItemsDirect(itemsToInsert)
+                }
+
+                // 5. Restore Sequences
+                val seqArray = root.optJSONArray("sequences") ?: org.json.JSONArray()
+                for (i in 0 until seqArray.length()) {
+                    val obj = seqArray.getJSONObject(i)
+                    val type = obj.getString("type")
+                    val value = obj.getInt("lastVal")
+                    val currentStored = repository.getLastSequenceValue(type) ?: 0
+                    if (value > currentStored) {
+                        repository.insertSequenceValue(com.example.data.InvoiceSequenceEntity(type, value))
+                    }
+                }
+
+                // 6. Restore Settings Map
+                val settingsObj = root.optJSONObject("settings") ?: org.json.JSONObject()
+                val editor = sharedPrefs.edit()
+                val iter = settingsObj.keys()
+                while (iter.hasNext()) {
+                    val key = iter.next()
+                    val value = settingsObj.get(key)
+                    if (value is Boolean) {
+                        editor.putBoolean(key, value)
+                    } else if (value is Float || value is Double) {
+                        editor.putFloat(key, value.toString().toFloat())
+                    } else if (value is Int) {
+                        editor.putInt(key, value)
+                    } else if (value is Long) {
+                        editor.putLong(key, value)
+                    } else {
+                        editor.putString(key, value.toString())
+                    }
+                }
+                editor.apply()
+
+                // Reload profile details into viewModel streams
+                loadBusinessProfile()
+
+                val time = System.currentTimeMillis()
+                sharedPrefs.edit().putLong("last_sync_time", time).apply()
+                lastSyncTime.value = time
+                syncStatusMessage.value = "Cloud restore and merge completed successfully"
+            } catch (e: Exception) {
+                e.printStackTrace()
+                syncStatusMessage.value = "Restore failed: ${e.localizedMessage}"
+            } finally {
+                isSyncing.value = false
+            }
+        }
+    }
+
+    fun dismissSyncStatus() {
+        syncStatusMessage.value = null
+    }
+
+    // A helper method for instant multi-device review
+    fun simulateSecondDevice() {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                com.example.data.AppDatabase.getDatabase(application).clearAllTables()
+                loadBusinessProfile()
+                syncStatusMessage.value = "Device data successfully wiped. You are now simulated as a second device. Simply click Restore to sync all cloud data!"
+            } catch (e: Exception) {
+                syncStatusMessage.value = "Simulation failed: ${e.localizedMessage}"
+            }
+        }
+    }
+}
+
+sealed class UpdateStatus {
+    object Idle : UpdateStatus()
+    object Checking : UpdateStatus()
+    data class NewUpdateAvailable(
+        val currentVersion: String,
+        val latestVersion: String,
+        val whatsNew: String,
+        val apkUrl: String,
+        val forceUpdate: Boolean
+    ) : UpdateStatus()
+    data class Downloading(val progress: Float) : UpdateStatus()
+    data class Error(val message: String) : UpdateStatus()
+    data class DownloadCompleted(val apkFile: java.io.File) : UpdateStatus()
 }
 
 data class DashboardStats(
@@ -1311,7 +2183,8 @@ data class DashboardStats(
     val remainingStockValue: Double = 0.0,
     val totalOutstandingCredit: Double = 0.0,
     val overdueCreditInvoicesCount: Int = 0,
-    val todaySales: Double = 0.0
+    val todaySales: Double = 0.0,
+    val todayProfit: Double = 0.0
 )
 
 class BillingViewModelFactory(

@@ -2868,6 +2868,14 @@ fun CreateSaleInvoiceDialog(
     )
 }
 
+data class PurchaseItemDraft(
+    val productName: String = "",
+    val hsnCode: String = "",
+    val quantity: String = "1",
+    val rate: String = "",
+    val gstPercentageStr: String = "18.0"
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePurchaseDialog(
@@ -2881,36 +2889,33 @@ fun CreatePurchaseDialog(
     var supplierBillRef by remember { mutableStateOf("") }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    var productName by remember { mutableStateOf("") }
-    var quantity by remember { mutableStateOf("1") }
-    var rate by remember { mutableStateOf("") }
-    var hsnCode by remember { mutableStateOf("") }
-    var gstPercentageStr by remember { mutableStateOf("18.0") } // Default to 18%
+    val purchaseItems = remember { mutableStateListOf(PurchaseItemDraft()) }
     
     val products by viewModel.productSummaries.collectAsStateWithLifecycle()
     val distinctItemNames by viewModel.distinctItemNames.collectAsStateWithLifecycle()
     
-    // Expanded state for product search suggestions dropdown
-    var expandedDropdown by remember { mutableStateOf(false) }
-    
-    // Auto calculate values
-    val parsedQty = quantity.toDoubleOrNull() ?: 0.0
-    val parsedRate = rate.toDoubleOrNull() ?: 0.0
-    val parsedGst = gstPercentageStr.toDoubleOrNull() ?: 0.0
-    val netPrice = parsedQty * parsedRate
-    val gstAmount = netPrice * (parsedGst / 100.0)
-    val grandTotal = netPrice + gstAmount
+    // Track which item's product suggestions dropdown is expanded
+    var expandedDropdownIndex by remember { mutableStateOf<Int?>(null) }
     
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     
-    val filteredSuggestions = remember(productName, distinctItemNames) {
-        if (productName.isEmpty()) emptyList()
-        else distinctItemNames.filter { it.contains(productName, ignoreCase = true) }
-    }
-    
     val dateSdf = remember { SimpleDateFormat("dd MMM yyyy", Locale.getDefault()) }
+
+    // Calculate totals dynamically for the summary card and saving
+    var totalNetSum = 0.0
+    var totalGstSum = 0.0
+    purchaseItems.forEach { itemDraft ->
+        val qty = itemDraft.quantity.toDoubleOrNull() ?: 0.0
+        val price = itemDraft.rate.toDoubleOrNull() ?: 0.0
+        val gstPct = itemDraft.gstPercentageStr.toDoubleOrNull() ?: 0.0
+        val net = qty * price
+        val gst = net * (gstPct / 100.0)
+        totalNetSum += net
+        totalGstSum += gst
+    }
+    val overallGrandTotal = totalNetSum + totalGstSum
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -2922,30 +2927,59 @@ fun CreatePurchaseDialog(
                         showError = true
                         return@Button
                     }
-                    if (productName.trim().isEmpty()) {
-                        errorMessage = "Product Name cannot be empty"
+                    if (purchaseItems.isEmpty()) {
+                        errorMessage = "Please add at least one item line"
                         showError = true
                         return@Button
                     }
-                    if (parsedQty <= 0) {
-                        errorMessage = "Quantity must be greater than 0"
+                    if (purchaseItems.any { it.productName.trim().isEmpty() }) {
+                        errorMessage = "Product Name cannot be empty for any item"
                         showError = true
                         return@Button
                     }
-                    if (parsedRate < 0) {
-                        errorMessage = "Rate cannot be negative"
+                    if (purchaseItems.any { (it.quantity.toDoubleOrNull() ?: 0.0) <= 0 }) {
+                        errorMessage = "Quantity must be greater than 0 for all items"
+                        showError = true
+                        return@Button
+                    }
+                    if (purchaseItems.any { (it.rate.toDoubleOrNull() ?: 0.0) < 0 }) {
+                        errorMessage = "Rate cannot be negative for any item"
                         showError = true
                         return@Button
                     }
                     
                     scope.launch {
-                        // Append HSN if provided, so we can extract it deterministically
-                        val finalItemName = if (hsnCode.trim().isNotEmpty()) {
-                            "${productName.trim()} [HSN: ${hsnCode.trim()}]"
-                        } else {
-                            productName.trim()
+                        var totalNet = 0.0
+                        var totalGst = 0.0
+                        
+                        val invoiceItems = purchaseItems.map { itemDraft ->
+                            val productNameTrimmed = itemDraft.productName.trim()
+                            val hsnTrimmed = itemDraft.hsnCode.trim()
+                            val finalItemName = if (hsnTrimmed.isNotEmpty()) {
+                                "$productNameTrimmed [HSN: $hsnTrimmed]"
+                            } else {
+                                productNameTrimmed
+                            }
+                            val itemQty = itemDraft.quantity.toDoubleOrNull() ?: 0.0
+                            val itemRate = itemDraft.rate.toDoubleOrNull() ?: 0.0
+                            val itemGst = itemDraft.gstPercentageStr.toDoubleOrNull() ?: 0.0
+                            
+                            val itemNet = itemQty * itemRate
+                            val itemGstAmt = itemNet * (itemGst / 100.0)
+                            
+                            totalNet += itemNet
+                            totalGst += itemGstAmt
+                            
+                            com.example.data.InvoiceItemEntity(
+                                invoiceId = 0,
+                                name = finalItemName,
+                                price = itemRate,
+                                quantity = itemQty,
+                                totalPrice = itemNet
+                            )
                         }
                         
+                        val effectiveGstRate = if (totalNet > 0) (totalGst / totalNet) * 100.0 else 0.0
                         val billRefText = if (supplierBillRef.trim().isNotEmpty()) {
                             "Bill Ref: ${supplierBillRef.trim()}"
                         } else {
@@ -2953,28 +2987,20 @@ fun CreatePurchaseDialog(
                         }
 
                         val invoice = com.example.data.InvoiceEntity(
-                            invoiceNumber = supplierInvoiceNo.trim(), // Record actual supplier invoice number, NO VM BOOK prefix!
+                            invoiceNumber = supplierInvoiceNo.trim(),
                             partyName = partyName,
                             type = "PURCHASE",
-                            date = supplierInvoiceDate, // Record Supplier Invoice Date
+                            date = supplierInvoiceDate,
                             discount = 0.0,
-                            tax = parsedGst,
-                            totalAmount = grandTotal,
+                            tax = effectiveGstRate,
+                            totalAmount = totalNet + totalGst,
                             notes = billRefText,
                             isCreditSale = false,
                             outstandingAmount = 0.0,
                             dueDate = 0L
                         )
                         
-                        val item = com.example.data.InvoiceItemEntity(
-                            invoiceId = 0,
-                            name = finalItemName,
-                            price = parsedRate,
-                            quantity = parsedQty,
-                            totalPrice = netPrice
-                        )
-                        
-                        viewModel.saveDirectInvoice(invoice, listOf(item))
+                        viewModel.saveDirectInvoice(invoice, invoiceItems)
                         onSave()
                     }
                 },
@@ -3039,7 +3065,7 @@ fun CreatePurchaseDialog(
                         showError = false
                     },
                     label = { Text("Supplier Invoice Number *") },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.fillMaxWidth().testTag("supplier_invoice_number"),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
                 )
@@ -3086,140 +3112,267 @@ fun CreatePurchaseDialog(
 
                 HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 
-                // Select/Add Product field with custom suggestions drop-down
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    OutlinedTextField(
-                        value = productName,
-                        onValueChange = {
-                            productName = it
-                            showError = false
-                            expandedDropdown = it.isNotEmpty()
-                            // Try to prefill HSN code and purchase rate if product exists in summaries
-                            val matchedProd = products.find { p -> p.name.trim().equals(it.trim(), ignoreCase = true) }
-                            if (matchedProd != null) {
-                                hsnCode = getDeterministicHsn(matchedProd.name)
-                                if (matchedProd.avgPurchasePrice > 0) {
-                                    rate = String.format(Locale.US, "%.2f", matchedProd.avgPurchasePrice)
+                // Items List Title and Add Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "PURCHASED PRODUCTS",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
+                        onClick = { purchaseItems.add(PurchaseItemDraft()) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF1E88E5)),
+                        contentPadding = PaddingValues(horizontal = 8.dp),
+                        modifier = Modifier.testTag("purchase_add_item")
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Add Item", fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                // Render dynamic item list
+                purchaseItems.forEachIndexed { index, itemDraft ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Header: Item index and Delete Button
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Item #${index + 1}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E88E5)
+                                )
+                                if (purchaseItems.size > 1) {
+                                    IconButton(
+                                        onClick = { purchaseItems.removeAt(index) },
+                                        modifier = Modifier.size(24.dp).testTag("purchase_delete_item_$index")
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Delete,
+                                            contentDescription = "Delete item line",
+                                            tint = MaterialTheme.colorScheme.error,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
                             }
-                        },
-                        label = { Text("Product Name *") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true,
-                        trailingIcon = {
-                            IconButton(onClick = { expandedDropdown = !expandedDropdown }) {
-                                Icon(Icons.Default.ArrowDropDown, contentDescription = "Suggestions")
-                            }
-                        }
-                    )
-                    
-                    if (expandedDropdown && filteredSuggestions.isNotEmpty()) {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 64.dp)
-                                .align(Alignment.TopStart),
-                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
-                        ) {
-                            Column(modifier = Modifier.heightIn(max = 200.dp).verticalScroll(rememberScrollState())) {
-                                filteredSuggestions.forEach { suggestion ->
-                                    Box(
+
+                            // Product Name Selection with suggestions
+                            Box(modifier = Modifier.fillMaxWidth()) {
+                                OutlinedTextField(
+                                    value = itemDraft.productName,
+                                    onValueChange = { newName ->
+                                        val matchedProd = products.find { p -> p.name.trim().equals(newName.trim(), ignoreCase = true) }
+                                        val prefilledRate = if (matchedProd != null && matchedProd.avgPurchasePrice > 0) {
+                                            String.format(Locale.US, "%.2f", matchedProd.avgPurchasePrice)
+                                        } else {
+                                            itemDraft.rate
+                                        }
+                                        purchaseItems[index] = itemDraft.copy(
+                                            productName = newName,
+                                            hsnCode = matchedProd?.let { getDeterministicHsn(it.name) } ?: itemDraft.hsnCode,
+                                            rate = prefilledRate
+                                        )
+                                        expandedDropdownIndex = index
+                                        showError = false
+                                    },
+                                    label = { Text("Product Name *") },
+                                    modifier = Modifier.fillMaxWidth().testTag("purchase_product_name_$index"),
+                                    singleLine = true,
+                                    trailingIcon = {
+                                        IconButton(onClick = {
+                                            expandedDropdownIndex = if (expandedDropdownIndex == index) null else index
+                                        }) {
+                                            Icon(Icons.Default.ArrowDropDown, contentDescription = "Suggestions")
+                                        }
+                                    }
+                                )
+
+                                val filteredSuggestions = distinctItemNames.filter {
+                                    it.contains(itemDraft.productName, ignoreCase = true) && it != itemDraft.productName
+                                }
+
+                                if (expandedDropdownIndex == index && filteredSuggestions.isNotEmpty() && itemDraft.productName.isNotEmpty()) {
+                                    Card(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .clickable {
-                                                productName = suggestion
-                                                expandedDropdown = false
-                                                // Pre-fill fields
-                                                hsnCode = getDeterministicHsn(suggestion)
-                                                val matchedProd = products.find { p -> p.name.trim().equals(suggestion.trim(), ignoreCase = true) }
-                                                if (matchedProd != null) {
-                                                    if (matchedProd.avgPurchasePrice > 0) {
-                                                        rate = String.format(Locale.US, "%.2f", matchedProd.avgPurchasePrice)
-                                                    }
-                                                }
-                                            }
-                                            .padding(12.dp)
+                                            .padding(top = 64.dp),
+                                        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
                                     ) {
-                                        Text(suggestion)
+                                        Column(modifier = Modifier.heightIn(max = 150.dp).verticalScroll(rememberScrollState())) {
+                                            filteredSuggestions.forEach { suggestion ->
+                                                Box(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .clickable {
+                                                            val matchedProd = products.find { p -> p.name.trim().equals(suggestion.trim(), ignoreCase = true) }
+                                                            val prefilledRate = if (matchedProd != null && matchedProd.avgPurchasePrice > 0) {
+                                                                String.format(Locale.US, "%.2f", matchedProd.avgPurchasePrice)
+                                                            } else {
+                                                                itemDraft.rate
+                                                            }
+                                                            purchaseItems[index] = itemDraft.copy(
+                                                                productName = suggestion,
+                                                                hsnCode = getDeterministicHsn(suggestion),
+                                                                rate = prefilledRate
+                                                            )
+                                                            expandedDropdownIndex = null
+                                                        }
+                                                        .padding(12.dp)
+                                                ) {
+                                                    Text(suggestion)
+                                                }
+                                                HorizontalDivider()
+                                            }
+                                        }
                                     }
-                                    HorizontalDivider()
                                 }
+                            }
+
+                            // HSN Code
+                            OutlinedTextField(
+                                value = itemDraft.hsnCode,
+                                onValueChange = {
+                                    purchaseItems[index] = itemDraft.copy(hsnCode = it)
+                                },
+                                label = { Text("HSN Code") },
+                                modifier = Modifier.fillMaxWidth().testTag("purchase_hsn_code_$index"),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true
+                            )
+
+                            // Quantity and Purchase Rate row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = itemDraft.quantity,
+                                    onValueChange = {
+                                        purchaseItems[index] = itemDraft.copy(quantity = it)
+                                        showError = false
+                                    },
+                                    label = { Text("Quantity *") },
+                                    modifier = Modifier.weight(1f).testTag("purchase_qty_$index"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                                OutlinedTextField(
+                                    value = itemDraft.rate,
+                                    onValueChange = {
+                                        purchaseItems[index] = itemDraft.copy(rate = it)
+                                        showError = false
+                                    },
+                                    label = { Text("Purchase Rate (₹) *") },
+                                    modifier = Modifier.weight(1f).testTag("purchase_rate_$index"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+                            }
+
+                            // GST % Input & Chips Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = itemDraft.gstPercentageStr,
+                                    onValueChange = {
+                                        purchaseItems[index] = itemDraft.copy(gstPercentageStr = it)
+                                    },
+                                    label = { Text("GST %") },
+                                    modifier = Modifier.weight(1f).testTag("purchase_gst_$index"),
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                    singleLine = true
+                                )
+
+                                Row(
+                                    modifier = Modifier.weight(1.5f),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    listOf("0", "5", "12", "18", "28").forEach { pct ->
+                                        val selected = itemDraft.gstPercentageStr == pct || itemDraft.gstPercentageStr == "$pct.0"
+                                        SuggestionChip(
+                                            onClick = {
+                                                purchaseItems[index] = itemDraft.copy(gstPercentageStr = "$pct.0")
+                                            },
+                                            label = { Text("$pct%", fontSize = 11.sp) },
+                                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                                containerColor = if (selected) Color(0xFF1E88E5).copy(alpha = 0.15f) else Color.Transparent,
+                                                labelColor = if (selected) Color(0xFF1E88E5) else MaterialTheme.colorScheme.onSurface
+                                            ),
+                                            border = BorderStroke(1.dp, if (selected) Color(0xFF1E88E5) else MaterialTheme.colorScheme.outlineVariant)
+                                        )
+                                    }
+                                }
+                            }
+
+                            // Row Calculations Display
+                            val itemQty = itemDraft.quantity.toDoubleOrNull() ?: 0.0
+                            val itemRate = itemDraft.rate.toDoubleOrNull() ?: 0.0
+                            val itemGstPct = itemDraft.gstPercentageStr.toDoubleOrNull() ?: 0.0
+                            val itemNet = itemQty * itemRate
+                            val itemGstAmt = itemNet * (itemGstPct / 100.0)
+                            val itemTotal = itemNet + itemGstAmt
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f), RoundedCornerShape(8.dp))
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column {
+                                    Text("Net Amt: ₹${String.format(Locale.US, "%.2f", itemNet)}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                                    Text("GST: ₹${String.format(Locale.US, "%.2f", itemGstAmt)} ($itemGstPct%)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(
+                                    "Total: ₹${String.format(Locale.US, "%.2f", itemTotal)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF1E88E5)
+                                )
                             }
                         }
                     }
                 }
-                
-                // HSN Code
-                OutlinedTextField(
-                    value = hsnCode,
-                    onValueChange = { hsnCode = it },
-                    label = { Text("HSN Code") },
+
+                // Add Item Text Button below the cards
+                OutlinedButton(
+                    onClick = { purchaseItems.add(PurchaseItemDraft()) },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true
-                )
-                
-                // Quantity and Purchase Rate row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = quantity,
-                        onValueChange = {
-                            quantity = it
-                            showError = false
-                        },
-                        label = { Text("Quantity *") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true
-                    )
-                    OutlinedTextField(
-                        value = rate,
-                        onValueChange = {
-                            rate = it
-                            showError = false
-                        },
-                        label = { Text("Purchase Rate (₹) *") },
-                        modifier = Modifier.weight(1f),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                        singleLine = true
-                    )
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Item Line", fontWeight = FontWeight.Bold)
                 }
-                
-                // GST % Input
-                OutlinedTextField(
-                    value = gstPercentageStr,
-                    onValueChange = { gstPercentageStr = it },
-                    label = { Text("GST %") },
-                    modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                    singleLine = true
-                )
-                
-                // Quick selection Chips for GST %
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    listOf("0", "5", "12", "18", "28").forEach { pct ->
-                        val selected = gstPercentageStr == pct || gstPercentageStr == "$pct.0"
-                        SuggestionChip(
-                            onClick = { gstPercentageStr = "$pct.0" },
-                            label = { Text("$pct%") },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = if (selected) Color(0xFF1E88E5).copy(alpha = 0.15f) else Color.Transparent,
-                                labelColor = if (selected) Color(0xFF1E88E5) else MaterialTheme.colorScheme.onSurface
-                            ),
-                            border = BorderStroke(1.dp, if (selected) Color(0xFF1E88E5) else MaterialTheme.colorScheme.outlineVariant)
-                        )
-                    }
-                }
-                
-                // Auto Calculated Summary Card
+
+                // 4. Auto Calculated Bill Summary Card
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
@@ -3230,28 +3383,34 @@ fun CreatePurchaseDialog(
                         modifier = Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = "BILL SUMMARY",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Net Price:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            Text("₹${String.format(Locale.US, "%.2f", netPrice)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                            Text("Subtotal Items Value:", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("₹${String.format(Locale.US, "%.2f", totalNetSum)}", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         }
                         
-                        if (parsedGst > 0) {
+                        if (totalGstSum > 0) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("CGST (${parsedGst / 2}%):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("₹${String.format(Locale.US, "%.2f", gstAmount / 2)}", style = MaterialTheme.typography.bodySmall)
+                                Text("CGST (Half of Total GST):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("₹${String.format(Locale.US, "%.2f", totalGstSum / 2)}", style = MaterialTheme.typography.bodySmall)
                             }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("SGST (${parsedGst / 2}%):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("₹${String.format(Locale.US, "%.2f", gstAmount / 2)}", style = MaterialTheme.typography.bodySmall)
+                                Text("SGST (Half of Total GST):", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("₹${String.format(Locale.US, "%.2f", totalGstSum / 2)}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         
@@ -3262,8 +3421,8 @@ fun CreatePurchaseDialog(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Grand Total:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("₹${String.format(Locale.US, "%.2f", grandTotal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1E88E5))
+                            Text("ESTIMATED GRAND TOTAL:", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("₹${String.format(Locale.US, "%.2f", overallGrandTotal)}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color(0xFF1E88E5))
                         }
                     }
                 }

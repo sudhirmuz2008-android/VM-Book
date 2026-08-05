@@ -10,6 +10,8 @@ import com.example.data.InvoiceRepository
 import com.example.ui.BillingAppContent
 import com.example.ui.BillingViewModel
 import com.example.ui.BillingViewModelFactory
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.ui.theme.MyApplicationTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,7 +21,8 @@ class MainActivity : ComponentActivity() {
     InvoiceRepository(
       database.invoiceDao(),
       database.customerDao(),
-      database.supplierDao()
+      database.supplierDao(),
+      database.productDao()
     ) 
   }
   private val viewModel: BillingViewModel by viewModels {
@@ -41,7 +44,13 @@ class MainActivity : ComponentActivity() {
     viewModel.checkAndSendDueReminders()
 
     setContent {
-      MyApplicationTheme {
+      val themeModeState by viewModel.themeMode.collectAsStateWithLifecycle()
+      val darkTheme = when (themeModeState) {
+          "light" -> false
+          "dark" -> true
+          else -> androidx.compose.foundation.isSystemInDarkTheme()
+      }
+      MyApplicationTheme(darkTheme = darkTheme) {
         BillingAppContent(viewModel = viewModel)
       }
     }

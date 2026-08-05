@@ -17,11 +17,23 @@ interface SupplierDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSupplier(supplier: SupplierEntity): Long
 
+    @Query("SELECT * FROM suppliers")
+    suspend fun getAllSuppliersList(): List<SupplierEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSuppliers(suppliers: List<SupplierEntity>)
+
     @Query("DELETE FROM suppliers WHERE id = :id")
     suspend fun deleteSupplierById(id: Long)
 
     @Query("SELECT * FROM supplier_payments ORDER BY date DESC")
     fun getAllSupplierPayments(): Flow<List<SupplierPaymentEntity>>
+
+    @Query("SELECT * FROM supplier_payments")
+    suspend fun getAllSupplierPaymentsList(): List<SupplierPaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSupplierPayments(payments: List<SupplierPaymentEntity>)
 
     @Query("SELECT * FROM supplier_payments WHERE supplierId = :supplierId ORDER BY date DESC")
     fun getPaymentsForSupplier(supplierId: Long): Flow<List<SupplierPaymentEntity>>

@@ -17,11 +17,23 @@ interface CustomerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomer(customer: CustomerEntity): Long
 
+    @Query("SELECT * FROM customers")
+    suspend fun getAllCustomersList(): List<CustomerEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCustomers(customers: List<CustomerEntity>)
+
     @Query("DELETE FROM customers WHERE id = :id")
     suspend fun deleteCustomerById(id: Long)
 
     @Query("SELECT * FROM customer_payments ORDER BY date DESC")
     fun getAllCustomerPayments(): Flow<List<CustomerPaymentEntity>>
+
+    @Query("SELECT * FROM customer_payments")
+    suspend fun getAllCustomerPaymentsList(): List<CustomerPaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCustomerPayments(payments: List<CustomerPaymentEntity>)
 
     @Query("SELECT * FROM customer_payments WHERE customerId = :customerId ORDER BY date DESC")
     fun getPaymentsForCustomer(customerId: Long): Flow<List<CustomerPaymentEntity>>

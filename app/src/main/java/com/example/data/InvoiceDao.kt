@@ -34,4 +34,37 @@ interface InvoiceDao {
 
     @Query("SELECT DISTINCT partyName FROM invoices WHERE partyName != '' ORDER BY partyName ASC")
     fun getDistinctPartyNames(): Flow<List<String>>
+
+    @Query("SELECT MAX(id) FROM invoices")
+    suspend fun getMaxInvoiceId(): Long?
+
+    @Query("SELECT seq FROM sqlite_sequence WHERE name = 'invoices'")
+    suspend fun getInvoiceSequenceValue(): Long?
+
+    @Query("UPDATE invoices SET invoiceNumber = :invoiceNumber WHERE id = :invoiceId")
+    suspend fun updateInvoiceNumber(invoiceId: Long, invoiceNumber: String)
+
+    @Query("SELECT lastVal FROM invoice_sequences WHERE type = :type")
+    suspend fun getLastSequenceValue(type: String): Int?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSequenceValue(seq: InvoiceSequenceEntity)
+
+    @Query("SELECT invoiceNumber FROM invoices WHERE type = :type")
+    suspend fun getInvoiceNumbersByType(type: String): List<String>
+
+    @Query("SELECT * FROM invoices")
+    suspend fun getAllInvoicesList(): List<InvoiceEntity>
+
+    @Query("SELECT * FROM invoice_items")
+    suspend fun getAllInvoiceItemsList(): List<InvoiceItemEntity>
+
+    @Query("SELECT * FROM invoice_sequences")
+    suspend fun getAllInvoiceSequencesList(): List<InvoiceSequenceEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertInvoices(invoices: List<InvoiceEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertInvoiceSequences(sequences: List<InvoiceSequenceEntity>)
 }
