@@ -2230,6 +2230,8 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
     val inv = item.invoice
     val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
 
+    val allProductItems by viewModel.productItems.collectAsStateWithLifecycle()
+
     var selectedFormat by remember { mutableStateOf(0) } // 0: A4 Tax Invoice, 1: 80mm Thermal Receipt
 
     val customersList by viewModel.customersWithBalance.collectAsStateWithLifecycle()
@@ -2540,7 +2542,7 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                     // Product Table Rows
                     item.items.forEach { line ->
                         val qtyStr = if (line.quantity % 1 == 0.0) line.quantity.toInt().toString() else line.quantity.toString()
-                        val hsn = getDeterministicHsn(line.name)
+                        val hsn = getProductHsn(line.name, line.hsnCode, allProductItems)
                         val unit = getDeterministicUnit(line.name)
                         Row(
                             modifier = Modifier
@@ -2740,7 +2742,7 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                         // Items
                         item.items.forEach { line ->
                             val qtyStr = if (line.quantity % 1 == 0.0) line.quantity.toInt().toString() else line.quantity.toString()
-                            val hsn = getDeterministicHsn(line.name)
+                            val hsn = getProductHsn(line.name, line.hsnCode, allProductItems)
                             val unit = getDeterministicUnit(line.name)
                             Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -2886,7 +2888,8 @@ fun InvoiceDetailScreen(viewModel: BillingViewModel, item: InvoiceWithItems) {
                         profile = profile,
                         isA4 = (selectedFormat == 0),
                         customerMatch = customerMatch,
-                        supplierMatch = supplierMatch
+                        supplierMatch = supplierMatch,
+                        allProductItems = allProductItems
                     )
                 },
                 modifier = Modifier
@@ -2949,16 +2952,30 @@ fun getDeterministicHsn(name: String): String {
     if (match != null) {
         return match.groupValues[1].trim()
     }
-
-    // Generate a consistent 4 or 8 digit HSN code based on the item name hash
-    val hash = Math.abs(name.hashCode())
-    val base = (hash % 9000) + 1000
-    return "8471$base"
+    return "N/A"
 }
 
 fun getCleanProductName(name: String): String {
     val hsnPattern = "\\s*\\[HSN:\\s*(.*?)\\]".toRegex()
     return name.replace(hsnPattern, "").trim()
+}
+
+fun getProductHsn(lineName: String, lineHsn: String?, allProductItems: List<com.example.data.ProductItemEntity>): String {
+    val cleanName = getCleanProductName(lineName)
+    val matchedProd = allProductItems.find { it.name.trim().equals(cleanName, ignoreCase = true) }
+    if (matchedProd != null) {
+        val hsn = matchedProd.hsnCode?.trim().orEmpty()
+        if (hsn.isNotEmpty()) return hsn
+    }
+    val nameHsnPattern = "\\[HSN:\\s*(.*?)\\]".toRegex()
+    val match = nameHsnPattern.find(lineName)
+    if (match != null) {
+        val extracted = match.groupValues[1].trim()
+        if (extracted.isNotEmpty()) return extracted
+    }
+    val fieldHsn = lineHsn?.trim().orEmpty()
+    if (fieldHsn.isNotEmpty()) return fieldHsn
+    return "N/A"
 }
 
 fun getDeterministicUnit(name: String): String {
@@ -3009,9 +3026,10 @@ fun printInvoice(
     profile: com.example.ui.BusinessProfile?,
     isA4: Boolean,
     customerMatch: com.example.data.CustomerEntity?,
-    supplierMatch: com.example.data.SupplierEntity?
+    supplierMatch: com.example.data.SupplierEntity?,
+    allProductItems: List<com.example.data.ProductItemEntity>
 ) {
-    val html = generateInvoiceHtml(item, profile, isA4, customerMatch, supplierMatch)
+    val html = generateInvoiceHtml(item, profile, isA4, customerMatch, supplierMatch, allProductItems)
     val webView = WebView(context)
     webView.webViewClient = object : WebViewClient() {
         override fun onPageFinished(view: WebView?, url: String?) {
@@ -3032,7 +3050,8 @@ fun generateInvoiceHtml(
     profile: com.example.ui.BusinessProfile?,
     isA4: Boolean,
     customerMatch: com.example.data.CustomerEntity?,
-    supplierMatch: com.example.data.SupplierEntity?
+    supplierMatch: com.example.data.SupplierEntity?,
+    allProductItems: List<com.example.data.ProductItemEntity>
 ): String {
     val inv = item.invoice
     val sdf = SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
@@ -3164,7 +3183,7 @@ fun generateInvoiceHtml(
                     <tbody>
                         ${item.items.joinToString("") { line ->
                             val qtyStr = if (line.quantity % 1 == 0.0) line.quantity.toInt().toString() else line.quantity.toString()
-                            val hsn = getDeterministicHsn(line.name)
+                            val hsn = getProductHsn(line.name, line.hsnCode, allProductItems)
                             val unit = getDeterministicUnit(line.name)
                             """
                             <tr>
@@ -3321,7 +3340,7 @@ fun generateInvoiceHtml(
                     <tbody>
                         ${item.items.joinToString("") { line ->
                             val qtyStr = if (line.quantity % 1 == 0.0) line.quantity.toInt().toString() else line.quantity.toString()
-                            val hsn = getDeterministicHsn(line.name)
+                            val hsn = getProductHsn(line.name, line.hsnCode, allProductItems)
                             val unit = getDeterministicUnit(line.name)
                             """
                             <tr>
@@ -9280,6 +9299,8 @@ fun PurchaseDetailView(
     val sdf = remember { SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault()) }
     var showDeleteCheck by remember { mutableStateOf(false) }
 
+    val allProductItems by viewModel.productItems.collectAsStateWithLifecycle()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -9496,7 +9517,7 @@ fun PurchaseDetailView(
                                     style = MaterialTheme.typography.bodyMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                val hsn = getDeterministicHsn(line.name)
+                                val hsn = getProductHsn(line.name, line.hsnCode, allProductItems)
                                 if (hsn.isNotEmpty()) {
                                     Text(
                                         text = "HSN: $hsn",

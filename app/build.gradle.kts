@@ -41,6 +41,7 @@ android {
 
   buildTypes {
     release {
+      isDebuggable = true
       isCrunchPngs = false
       isMinifyEnabled = false
       isShrinkResources = false

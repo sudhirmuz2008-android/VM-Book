@@ -2546,6 +2546,7 @@ fun CreateSaleInvoiceDialog(
     var gstPercentageStr by remember { mutableStateOf("18.0") } // Default to 18%
     
     val products by viewModel.productSummaries.collectAsStateWithLifecycle()
+    val allProductItems by viewModel.productItems.collectAsStateWithLifecycle()
     val distinctItemNames by viewModel.distinctItemNames.collectAsStateWithLifecycle()
     
     // Expanded state for product search suggestions dropdown
