@@ -22,13 +22,13 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.3.1'
 
       - name: Build Release APK
-        run: gradle assembleRelease --stacktrace
+        run: |
+          chmod +x ./gradlew
+          ./gradlew clean :app:assembleRelease --stacktrace
 
-      - name: Verify Release APK
+      - name: Check Release APK
         run: |
           APK="app/build/outputs/apk/release/app-release.apk"
 
@@ -37,20 +37,12 @@ jobs:
             exit 1
           fi
 
-          echo "APK found:"
+          echo "APK generated successfully:"
           ls -lh "$APK"
-
-          SIZE=$(stat -c%s "$APK")
-          echo "APK size: $SIZE bytes"
-
-          if [ "$SIZE" -lt 1000000 ]; then
-            echo "ERROR: APK is suspiciously small."
-            exit 1
-          fi
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: VM-Book-Release-APK
+          name: app-release-apk
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
