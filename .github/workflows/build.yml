@@ -22,11 +22,11 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
 
       - name: Build Release APK
-        run: |
-          chmod +x ./gradlew
-          ./gradlew clean :app:assembleRelease --stacktrace
+        run: gradle assembleRelease --stacktrace
 
       - name: Check Release APK
         run: |
@@ -34,15 +34,16 @@ jobs:
 
           if [ ! -f "$APK" ]; then
             echo "ERROR: Release APK was not generated."
+            find app/build/outputs -type f 2>/dev/null || true
             exit 1
           fi
 
-          echo "APK generated successfully:"
+          echo "APK found:"
           ls -lh "$APK"
 
       - name: Upload Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
+          name: VM-Book-Release-APK
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
