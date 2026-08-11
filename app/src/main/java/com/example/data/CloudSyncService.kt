@@ -21,9 +21,25 @@ object CloudSyncService {
         invoices: List<InvoiceEntity>,
         invoiceItems: List<InvoiceItemEntity>,
         sequences: List<InvoiceSequenceEntity>,
-        settings: Map<String, *>
+        settings: Map<String, *>,
+        firms: List<FirmEntity> = emptyList()
     ): String {
         val root = JSONObject()
+
+        // Firms
+        val firmsArray = JSONArray()
+        for (f in firms) {
+            val obj = JSONObject()
+            obj.put("id", f.id)
+            obj.put("name", f.name)
+            obj.put("phone", f.phone)
+            obj.put("email", f.email)
+            obj.put("address", f.address)
+            obj.put("gstin", f.gstin)
+            obj.put("logoUri", f.logoUri)
+            firmsArray.put(obj)
+        }
+        root.put("firms", firmsArray)
 
         // Customers
         val customersArray = JSONArray()
@@ -35,6 +51,7 @@ object CloudSyncService {
             obj.put("email", c.email)
             obj.put("address", c.address)
             obj.put("notes", c.notes)
+            obj.put("firmId", c.firmId)
             customersArray.put(obj)
         }
         root.put("customers", customersArray)
@@ -50,6 +67,7 @@ object CloudSyncService {
             obj.put("paymentMode", p.paymentMode)
             obj.put("referenceNo", p.referenceNo)
             obj.put("notes", p.notes)
+            obj.put("firmId", p.firmId)
             custPaymentsArray.put(obj)
         }
         root.put("customerPayments", custPaymentsArray)
@@ -64,6 +82,7 @@ object CloudSyncService {
             obj.put("email", s.email)
             obj.put("address", s.address)
             obj.put("notes", s.notes)
+            obj.put("firmId", s.firmId)
             suppliersArray.put(obj)
         }
         root.put("suppliers", suppliersArray)
@@ -79,6 +98,7 @@ object CloudSyncService {
             obj.put("paymentMode", p.paymentMode)
             obj.put("referenceNo", p.referenceNo)
             obj.put("notes", p.notes)
+            obj.put("firmId", p.firmId)
             suppPaymentsArray.put(obj)
         }
         root.put("supplierPayments", suppPaymentsArray)
@@ -89,6 +109,7 @@ object CloudSyncService {
             val obj = JSONObject()
             obj.put("id", cat.id)
             obj.put("name", cat.name)
+            obj.put("firmId", cat.firmId)
             categoriesArray.put(obj)
         }
         root.put("categories", categoriesArray)
@@ -110,6 +131,7 @@ object CloudSyncService {
             if (item.defaultDiscountType != null) {
                 obj.put("defaultDiscountType", item.defaultDiscountType)
             }
+            obj.put("firmId", item.firmId)
             itemsArray.put(obj)
         }
         root.put("items", itemsArray)
@@ -130,6 +152,7 @@ object CloudSyncService {
             obj.put("isCreditSale", inv.isCreditSale)
             obj.put("outstandingAmount", inv.outstandingAmount)
             obj.put("dueDate", inv.dueDate)
+            obj.put("firmId", inv.firmId)
             invoicesArray.put(obj)
         }
         root.put("invoices", invoicesArray)
@@ -155,6 +178,7 @@ object CloudSyncService {
             val obj = JSONObject()
             obj.put("type", seq.type)
             obj.put("lastVal", seq.lastVal)
+            obj.put("firmId", seq.firmId)
             seqArray.put(obj)
         }
         root.put("sequences", seqArray)

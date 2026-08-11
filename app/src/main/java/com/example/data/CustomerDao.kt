@@ -8,8 +8,8 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface CustomerDao {
-    @Query("SELECT * FROM customers ORDER BY name ASC")
-    fun getAllCustomers(): Flow<List<CustomerEntity>>
+    @Query("SELECT * FROM customers WHERE firmId = :firmId ORDER BY name ASC")
+    fun getAllCustomers(firmId: Long): Flow<List<CustomerEntity>>
 
     @Query("SELECT * FROM customers WHERE id = :id")
     fun getCustomerById(id: Long): Flow<CustomerEntity?>
@@ -17,8 +17,11 @@ interface CustomerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomer(customer: CustomerEntity): Long
 
+    @Query("SELECT * FROM customers WHERE firmId = :firmId")
+    suspend fun getAllCustomersList(firmId: Long): List<CustomerEntity>
+
     @Query("SELECT * FROM customers")
-    suspend fun getAllCustomersList(): List<CustomerEntity>
+    suspend fun getAllCustomersListUnfiltered(): List<CustomerEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomers(customers: List<CustomerEntity>)
@@ -26,11 +29,14 @@ interface CustomerDao {
     @Query("DELETE FROM customers WHERE id = :id")
     suspend fun deleteCustomerById(id: Long)
 
-    @Query("SELECT * FROM customer_payments ORDER BY date DESC")
-    fun getAllCustomerPayments(): Flow<List<CustomerPaymentEntity>>
+    @Query("SELECT * FROM customer_payments WHERE firmId = :firmId ORDER BY date DESC")
+    fun getAllCustomerPayments(firmId: Long): Flow<List<CustomerPaymentEntity>>
+
+    @Query("SELECT * FROM customer_payments WHERE firmId = :firmId")
+    suspend fun getAllCustomerPaymentsList(firmId: Long): List<CustomerPaymentEntity>
 
     @Query("SELECT * FROM customer_payments")
-    suspend fun getAllCustomerPaymentsList(): List<CustomerPaymentEntity>
+    suspend fun getAllCustomerPaymentsListUnfiltered(): List<CustomerPaymentEntity>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertCustomerPayments(payments: List<CustomerPaymentEntity>)

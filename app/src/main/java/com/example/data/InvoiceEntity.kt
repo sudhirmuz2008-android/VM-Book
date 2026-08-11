@@ -16,5 +16,6 @@ data class InvoiceEntity(
     val notes: String = "",
     val isCreditSale: Boolean = false,
     val outstandingAmount: Double = 0.0,
-    val dueDate: Long = 0L
+    val dueDate: Long = 0L,
+    val firmId: Long = 1L
 )

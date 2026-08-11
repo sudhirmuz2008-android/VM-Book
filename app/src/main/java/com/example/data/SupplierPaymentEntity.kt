@@ -11,5 +11,6 @@ data class SupplierPaymentEntity(
     val date: Long = System.currentTimeMillis(),
     val paymentMode: String = "Cash",
     val referenceNo: String = "",
-    val notes: String = ""
+    val notes: String = "",
+    val firmId: Long = 1L
 )

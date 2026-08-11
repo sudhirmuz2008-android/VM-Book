@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -126,6 +129,7 @@ data class InvoiceItemDraft(
     val discount: String = ""
 )
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class BillingViewModel(
     private val repository: InvoiceRepository,
     private val application: android.app.Application
@@ -133,22 +137,37 @@ class BillingViewModel(
 
     private val sharedPrefs = application.getSharedPreferences("business_profile_prefs", android.content.Context.MODE_PRIVATE)
 
+    val currentFirmId = MutableStateFlow<Long>(1L)
+    val allFirms: StateFlow<List<com.example.data.FirmEntity>> = repository.allFirms
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val allCustomersFlow: Flow<List<com.example.data.CustomerEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllCustomers(firmId) }
+    val allCustomerPaymentsFlow: Flow<List<com.example.data.CustomerPaymentEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllCustomerPayments(firmId) }
+    val allSuppliersFlow: Flow<List<com.example.data.SupplierEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllSuppliers(firmId) }
+    val allSupplierPaymentsFlow: Flow<List<com.example.data.SupplierPaymentEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllSupplierPayments(firmId) }
+
     val updateJsonUrl = MutableStateFlow(sharedPrefs.getString("update_json_url", "https://raw.githubusercontent.com/sudhir-muz/vmbook/main/update.json") ?: "https://raw.githubusercontent.com/sudhir-muz/vmbook/main/update.json")
     val updateStatus = MutableStateFlow<UpdateStatus>(UpdateStatus.Idle)
 
     val businessProfile = MutableStateFlow<BusinessProfile?>(null)
 
     // Tally-style Category & Item Master flows
-    val productCategories: StateFlow<List<com.example.data.ProductCategoryEntity>> = repository.allCategories
+    val productCategories: StateFlow<List<com.example.data.ProductCategoryEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllCategoriesFlow(firmId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val productItems: StateFlow<List<com.example.data.ProductItemEntity>> = repository.allProductItems
+    val productItems: StateFlow<List<com.example.data.ProductItemEntity>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllProductItemsFlow(firmId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // CRUD operations for Categories
     fun addCategory(name: String) {
         viewModelScope.launch {
-            repository.insertCategory(com.example.data.ProductCategoryEntity(name = name))
+            repository.insertCategory(com.example.data.ProductCategoryEntity(name = name, firmId = currentFirmId.value))
         }
     }
 
@@ -181,7 +200,8 @@ class BillingViewModel(
                     hsnCode = hsnCode,
                     defaultSellingRate = defaultSellingRate,
                     defaultDiscountValue = defaultDiscountValue,
-                    defaultDiscountType = defaultDiscountType
+                    defaultDiscountType = defaultDiscountType,
+                    firmId = currentFirmId.value
                 )
             )
         }
@@ -217,56 +237,181 @@ class BillingViewModel(
     }
 
     init {
-        loadBusinessProfile()
-        seedDefaultCategories()
+        viewModelScope.launch {
+            // 1. Seed/ensure default firm exists
+            val allFirmsList = repository.getAllFirmsList()
+            if (allFirmsList.isEmpty()) {
+                val legacyName = sharedPrefs.getString("firm_name", "")?.takeIf { it.isNotEmpty() } ?: "Vishwakarma Motor"
+                val legacyPhone = sharedPrefs.getString("mobile_number", "") ?: ""
+                val legacyAddress = sharedPrefs.getString("address", "") ?: ""
+                val legacyGstin = sharedPrefs.getString("gstin", "") ?: ""
+                val legacyEmail = sharedPrefs.getString("email", "") ?: ""
+                val legacyLogoUri = sharedPrefs.getString("business_logo_uri", "") ?: ""
+                
+                val defaultFirm = com.example.data.FirmEntity(
+                    id = 1L,
+                    name = legacyName,
+                    phone = legacyPhone,
+                    address = legacyAddress,
+                    gstin = legacyGstin,
+                    email = legacyEmail,
+                    logoUri = legacyLogoUri
+                )
+                repository.insertFirm(defaultFirm)
+            }
+            
+            // 2. Load stored active firm ID
+            val storedFirmId = sharedPrefs.getLong("current_firm_id", 1L)
+            val activeId = if (repository.getFirmById(storedFirmId) != null) storedFirmId else 1L
+            selectFirm(activeId)
+            
+            // 3. Seed default categories if needed
+            seedDefaultCategories()
+        }
         checkForUpdates(manual = false)
         initNetworkAutoSync()
     }
 
     private fun seedDefaultCategories() {
         viewModelScope.launch {
-            val existing = repository.getAllCategories()
+            val existing = repository.getAllCategories(currentFirmId.value)
             if (existing.isEmpty()) {
                 val defaults = listOf("Battery", "Lubricant", "Tyre", "Oil", "Spare Parts", "Accessories")
                 defaults.forEach {
-                    repository.insertCategory(com.example.data.ProductCategoryEntity(name = it))
+                    repository.insertCategory(com.example.data.ProductCategoryEntity(name = it, firmId = currentFirmId.value))
                 }
             }
         }
     }
 
-    fun loadBusinessProfile() {
-        val firmName = sharedPrefs.getString("firm_name", "") ?: ""
-        if (firmName.isNotEmpty()) {
-            val mobileNumber = sharedPrefs.getString("mobile_number", "") ?: ""
-            val address = sharedPrefs.getString("address", "") ?: ""
-            val gstin = sharedPrefs.getString("gstin", "") ?: ""
-            val email = sharedPrefs.getString("email", "") ?: ""
-            val businessLogoUri = sharedPrefs.getString("business_logo_uri", "") ?: ""
-            businessProfile.value = BusinessProfile(
-                firmName = firmName,
-                mobileNumber = mobileNumber,
+    fun selectFirm(firmId: Long) {
+        viewModelScope.launch {
+            currentFirmId.value = firmId
+            sharedPrefs.edit().putLong("current_firm_id", firmId).apply()
+            
+            // Load the firm's profile and update businessProfile
+            val firm = repository.getFirmById(firmId)
+            if (firm != null) {
+                val profile = BusinessProfile(
+                    firmName = firm.name,
+                    mobileNumber = firm.phone,
+                    address = firm.address,
+                    gstin = firm.gstin,
+                    email = firm.email,
+                    businessLogoUri = firm.logoUri
+                )
+                businessProfile.value = profile
+                
+                // Keep SharedPreferences in sync for any legacy components
+                sharedPrefs.edit().apply {
+                    putString("firm_name", firm.name)
+                    putString("mobile_number", firm.phone)
+                    putString("address", firm.address)
+                    putString("gstin", firm.gstin)
+                    putString("email", firm.email)
+                    putString("business_logo_uri", firm.logoUri)
+                    apply()
+                }
+            } else {
+                businessProfile.value = null
+            }
+        }
+    }
+
+    fun createNewFirm(
+        name: String,
+        phone: String = "",
+        email: String = "",
+        address: String = "",
+        gstin: String = "",
+        logoUri: String = ""
+    ) {
+        viewModelScope.launch {
+            val newFirm = com.example.data.FirmEntity(
+                name = name,
+                phone = phone,
+                email = email,
                 address = address,
                 gstin = gstin,
-                email = email,
-                businessLogoUri = businessLogoUri
+                logoUri = logoUri
             )
-        } else {
-            businessProfile.value = null
+            val newId = repository.insertFirm(newFirm)
+            selectFirm(newId)
+        }
+    }
+
+    fun loadBusinessProfile() {
+        viewModelScope.launch {
+            val firm = repository.getFirmById(currentFirmId.value)
+            if (firm != null) {
+                businessProfile.value = BusinessProfile(
+                    firmName = firm.name,
+                    mobileNumber = firm.phone,
+                    address = firm.address,
+                    gstin = firm.gstin,
+                    email = firm.email,
+                    businessLogoUri = firm.logoUri
+                )
+            } else {
+                val firmName = sharedPrefs.getString("firm_name", "") ?: ""
+                if (firmName.isNotEmpty()) {
+                    val mobileNumber = sharedPrefs.getString("mobile_number", "") ?: ""
+                    val address = sharedPrefs.getString("address", "") ?: ""
+                    val gstin = sharedPrefs.getString("gstin", "") ?: ""
+                    val email = sharedPrefs.getString("email", "") ?: ""
+                    val businessLogoUri = sharedPrefs.getString("business_logo_uri", "") ?: ""
+                    businessProfile.value = BusinessProfile(
+                        firmName = firmName,
+                        mobileNumber = mobileNumber,
+                        address = address,
+                        gstin = gstin,
+                        email = email,
+                        businessLogoUri = businessLogoUri
+                    )
+                } else {
+                    businessProfile.value = null
+                }
+            }
         }
     }
 
     fun saveBusinessProfile(profile: BusinessProfile) {
-        sharedPrefs.edit().apply {
-            putString("firm_name", profile.firmName)
-            putString("mobile_number", profile.mobileNumber)
-            putString("address", profile.address)
-            putString("gstin", profile.gstin)
-            putString("email", profile.email)
-            putString("business_logo_uri", profile.businessLogoUri)
-            apply()
+        viewModelScope.launch {
+            sharedPrefs.edit().apply {
+                putString("firm_name", profile.firmName)
+                putString("mobile_number", profile.mobileNumber)
+                putString("address", profile.address)
+                putString("gstin", profile.gstin)
+                putString("email", profile.email)
+                putString("business_logo_uri", profile.businessLogoUri)
+                apply()
+            }
+            businessProfile.value = profile
+            
+            val activeId = currentFirmId.value
+            val existingFirm = repository.getFirmById(activeId)
+            val updatedFirm = if (existingFirm != null) {
+                existingFirm.copy(
+                    name = profile.firmName,
+                    phone = profile.mobileNumber,
+                    address = profile.address,
+                    gstin = profile.gstin,
+                    email = profile.email,
+                    logoUri = profile.businessLogoUri
+                )
+            } else {
+                com.example.data.FirmEntity(
+                    id = activeId,
+                    name = profile.firmName,
+                    phone = profile.mobileNumber,
+                    address = profile.address,
+                    gstin = profile.gstin,
+                    email = profile.email,
+                    logoUri = profile.businessLogoUri
+                )
+            }
+            repository.insertFirm(updatedFirm)
         }
-        businessProfile.value = profile
     }
 
     // Screen State
@@ -308,8 +453,10 @@ class BillingViewModel(
     val typeFilter = MutableStateFlow("ALL") // "ALL", "SALE", "PURCHASE"
 
     // Raw invoices flow from repository
-    val rawInvoices = repository.allInvoices
-    val allInvoices: StateFlow<List<InvoiceWithItems>> = repository.allInvoices
+    val rawInvoices = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllInvoices(firmId) }
+    val allInvoices: StateFlow<List<InvoiceWithItems>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllInvoices(firmId) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Product calculations and summaries
@@ -369,19 +516,21 @@ class BillingViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Suggestions flows
-    val distinctItemNames: StateFlow<List<String>> = repository.distinctItemNames
+    val distinctItemNames: StateFlow<List<String>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getDistinctItemNames(firmId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val distinctPartyNames: StateFlow<List<String>> = repository.distinctPartyNames
+    val distinctPartyNames: StateFlow<List<String>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getDistinctPartyNames(firmId) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Separate Suggestions Flows
-    val customerSuggestions: StateFlow<List<String>> = repository.allCustomers
-        .map { list -> list.map { it.name } }
+    val customerSuggestions: StateFlow<List<String>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllCustomers(firmId).map { list -> list.map { it.name } } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val supplierSuggestions: StateFlow<List<String>> = repository.allSuppliers
-        .map { list -> list.map { it.name } }
+    val supplierSuggestions: StateFlow<List<String>> = currentFirmId
+        .flatMapLatest { firmId -> repository.getAllSuppliers(firmId).map { list -> list.map { it.name } } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Search and Selection States for Customers/Suppliers
@@ -392,9 +541,9 @@ class BillingViewModel(
 
     // Customer / Supplier with balances
     val customersWithBalance: StateFlow<List<CustomerWithBalance>> = combine(
-        repository.allCustomers,
+        allCustomersFlow,
         rawInvoices,
-        repository.allCustomerPayments,
+        allCustomerPaymentsFlow,
         customerSearchQuery
     ) { customerList, invoiceList, paymentList, query ->
         customerList.map { customer ->
@@ -416,9 +565,9 @@ class BillingViewModel(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val suppliersWithBalance: StateFlow<List<SupplierWithBalance>> = combine(
-        repository.allSuppliers,
+        allSuppliersFlow,
         rawInvoices,
-        repository.allSupplierPayments,
+        allSupplierPaymentsFlow,
         supplierSearchQuery
     ) { supplierList, invoiceList, paymentList, query ->
         supplierList.map { supplier ->
@@ -442,7 +591,7 @@ class BillingViewModel(
     // Selected Customer Ledger & Payments
     val selectedCustomer: StateFlow<com.example.data.CustomerEntity?> = combine(
         selectedCustomerId,
-        repository.allCustomers
+        allCustomersFlow
     ) { id, customers ->
         customers.find { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -450,7 +599,7 @@ class BillingViewModel(
     val selectedCustomerLedger: StateFlow<List<CustomerLedgerEntry>> = combine(
         selectedCustomer,
         rawInvoices,
-        repository.allCustomerPayments
+        allCustomerPaymentsFlow
     ) { customer, invoices, payments ->
         if (customer == null) return@combine emptyList()
         val customerInvoices = invoices.filter {
@@ -500,7 +649,7 @@ class BillingViewModel(
     // Selected Supplier Ledger & Payments
     val selectedSupplier: StateFlow<com.example.data.SupplierEntity?> = combine(
         selectedSupplierId,
-        repository.allSuppliers
+        allSuppliersFlow
     ) { id, suppliers ->
         suppliers.find { it.id == id }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
@@ -508,7 +657,7 @@ class BillingViewModel(
     val selectedSupplierLedger: StateFlow<List<SupplierLedgerEntry>> = combine(
         selectedSupplier,
         rawInvoices,
-        repository.allSupplierPayments
+        allSupplierPaymentsFlow
     ) { supplier, invoices, payments ->
         if (supplier == null) return@combine emptyList()
         val supplierInvoices = invoices.filter {
@@ -558,7 +707,7 @@ class BillingViewModel(
     // Operations for Customer / Supplier
     fun addCustomer(customer: com.example.data.CustomerEntity) {
         viewModelScope.launch {
-            repository.insertCustomer(customer)
+            repository.insertCustomer(customer.copy(firmId = currentFirmId.value))
         }
     }
 
@@ -570,7 +719,7 @@ class BillingViewModel(
 
     fun addCustomerPayment(payment: com.example.data.CustomerPaymentEntity) {
         viewModelScope.launch {
-            repository.insertCustomerPayment(payment)
+            repository.insertCustomerPayment(payment.copy(firmId = currentFirmId.value))
         }
     }
 
@@ -588,7 +737,8 @@ class BillingViewModel(
                 notes = notes,
                 isCreditSale = true,
                 outstandingAmount = amount,
-                dueDate = 0L
+                dueDate = 0L,
+                firmId = currentFirmId.value
             )
             val items = listOf(
                 com.example.data.InvoiceItemEntity(
@@ -617,7 +767,8 @@ class BillingViewModel(
                 notes = notes,
                 isCreditSale = true,
                 outstandingAmount = amount,
-                dueDate = 0L
+                dueDate = 0L,
+                firmId = currentFirmId.value
             )
             val items = listOf(
                 com.example.data.InvoiceItemEntity(
@@ -640,7 +791,7 @@ class BillingViewModel(
 
     fun addSupplier(supplier: com.example.data.SupplierEntity) {
         viewModelScope.launch {
-            repository.insertSupplier(supplier)
+            repository.insertSupplier(supplier.copy(firmId = currentFirmId.value))
         }
     }
 
@@ -652,7 +803,7 @@ class BillingViewModel(
 
     fun addSupplierPayment(payment: com.example.data.SupplierPaymentEntity) {
         viewModelScope.launch {
-            repository.insertSupplierPayment(payment)
+            repository.insertSupplierPayment(payment.copy(firmId = currentFirmId.value))
         }
     }
 
@@ -971,7 +1122,7 @@ class BillingViewModel(
 
     suspend fun getNextInvoiceNumber(type: String): String {
         val prefix = if (type == "SALE") "INV-" else "PUR-"
-        val existingNumbers = repository.getInvoiceNumbersByType(type)
+        val existingNumbers = repository.getInvoiceNumbersByType(currentFirmId.value, type)
         var maxInTable = 0
         for (num in existingNumbers) {
             if (num.startsWith(prefix, ignoreCase = true)) {
@@ -982,7 +1133,7 @@ class BillingViewModel(
                 }
             }
         }
-        val storedLastVal = repository.getLastSequenceValue(type) ?: 0
+        val storedLastVal = repository.getLastSequenceValue(currentFirmId.value, type) ?: 0
         val nextId = maxOf(maxInTable, storedLastVal) + 1
         return "$prefix${String.format(Locale.US, "%04d", nextId)}"
     }
@@ -1149,7 +1300,8 @@ class BillingViewModel(
             notes = notes,
             isCreditSale = isCredit,
             outstandingAmount = outstandingAmount,
-            dueDate = dueDateVal
+            dueDate = dueDateVal,
+            firmId = currentFirmId.value
         )
 
         viewModelScope.launch {
@@ -1189,14 +1341,15 @@ class BillingViewModel(
     ) {
         viewModelScope.launch {
             // Find or create customer
-            val existingCust = repository.allCustomers.first().find { 
+            val existingCust = allCustomersFlow.first().find { 
                 it.name.trim().equals(partyName.trim(), ignoreCase = true) 
             }
             val customerId = existingCust?.id ?: repository.insertCustomer(
                 com.example.data.CustomerEntity(
                     name = partyName.trim(),
                     phone = "",
-                    address = ""
+                    address = "",
+                    firmId = currentFirmId.value
                 )
             )
             
@@ -1208,7 +1361,8 @@ class BillingViewModel(
                     date = date,
                     paymentMode = paymentMode,
                     referenceNo = referenceNo,
-                    notes = notes
+                    notes = notes,
+                    firmId = currentFirmId.value
                 )
             )
             
@@ -1281,7 +1435,7 @@ class BillingViewModel(
         viewModelScope.launch {
             try {
                 createNotificationChannel()
-                val list = repository.allInvoices.first()
+                val list = repository.getAllInvoices(currentFirmId.value).first()
                 
                 val now = System.currentTimeMillis()
                 val calendarToday = java.util.Calendar.getInstance()
@@ -1320,8 +1474,8 @@ class BillingViewModel(
                                 content = "Invoice #${item.invoice.invoiceNumber} for ${item.invoice.partyName} of ₹${String.format(Locale.US, "%.2f", item.invoice.outstandingAmount)} is OVERDUE!"
                             )
                         } else {
-                            val oneDayMs = 24 * 60 * 60 * 1000L
-                            if (dueDate - now <= oneDayMs) {
+                            val diff = dueDate - now
+                            if (diff <= 86400000L) {
                                 upcomingCount++
                                 sendNotification(
                                     id = item.invoice.id.toInt() * 10 + 3,
@@ -1527,7 +1681,8 @@ class BillingViewModel(
                 notes = if (reason.trim().isNotEmpty()) reason.trim() else "Manual Stock Adjustment",
                 isCreditSale = false,
                 outstandingAmount = 0.0,
-                dueDate = 0L
+                dueDate = 0L,
+                firmId = currentFirmId.value
             )
             val items = listOf(
                 com.example.data.InvoiceItemEntity(
@@ -1793,15 +1948,16 @@ class BillingViewModel(
             syncStatusMessage.value = if (isAutoSync) "Auto-syncing..." else "Creating cloud backup..."
             try {
                 // Fetch all data from database tables
-                val customers = repository.getAllCustomersList()
-                val customerPayments = repository.getAllCustomerPaymentsList()
-                val suppliers = repository.getAllSuppliersList()
-                val supplierPayments = repository.getAllSupplierPaymentsList()
-                val categories = repository.getAllCategories()
-                val items = repository.getAllProductItems()
-                val invoices = repository.getAllInvoicesList()
+                val customers = repository.getAllCustomersListUnfiltered()
+                val customerPayments = repository.getAllCustomerPaymentsListUnfiltered()
+                val suppliers = repository.getAllSuppliersListUnfiltered()
+                val supplierPayments = repository.getAllSupplierPaymentsListUnfiltered()
+                val categories = repository.getAllCategoriesUnfiltered()
+                val items = repository.getAllProductItemsUnfiltered()
+                val invoices = repository.getAllInvoicesListUnfiltered()
                 val invoiceItems = repository.getAllInvoiceItemsList()
-                val sequences = repository.getAllInvoiceSequencesList()
+                val sequences = repository.getAllInvoiceSequencesListUnfiltered()
+                val firms = repository.getAllFirmsList()
 
                 // Package settings from SharedPreferences
                 val settingsKeys = listOf(
@@ -1816,7 +1972,7 @@ class BillingViewModel(
 
                 val payload = com.example.data.CloudSyncService.serializePayload(
                     customers, customerPayments, suppliers, supplierPayments,
-                    categories, items, invoices, invoiceItems, sequences, settingsMap
+                    categories, items, invoices, invoiceItems, sequences, settingsMap, firms
                 )
 
                 val success = if (isCloudSandboxEnabled.value) {
@@ -1865,32 +2021,62 @@ class BillingViewModel(
 
                 val root = org.json.JSONObject(payloadText)
 
+                // 0. Restore Firms
+                val firmsArray = root.optJSONArray("firms") ?: org.json.JSONArray()
+                val localFirms = repository.getAllFirmsList()
+                val localFirmsMap = localFirms.associateBy { it.id }
+                for (i in 0 until firmsArray.length()) {
+                    val obj = firmsArray.getJSONObject(i)
+                    val id = obj.getLong("id")
+                    val name = obj.getString("name")
+                    val phone = obj.optString("phone", "")
+                    val email = obj.optString("email", "")
+                    val address = obj.optString("address", "")
+                    val gstin = obj.optString("gstin", "")
+                    val logoUri = obj.optString("logoUri", "")
+                    
+                    if (!localFirmsMap.containsKey(id)) {
+                        repository.insertFirm(com.example.data.FirmEntity(
+                            id = id,
+                            name = name,
+                            phone = phone,
+                            email = email,
+                            address = address,
+                            gstin = gstin,
+                            logoUri = logoUri
+                        ))
+                    }
+                }
+
                 // 1. Restore Categories & Products
                 val catArray = root.optJSONArray("categories") ?: org.json.JSONArray()
-                val localCats = repository.getAllCategories()
-                val catNameToIdMap = localCats.associate { it.name to it.id }.toMutableMap()
+                val localCats = repository.getAllCategoriesUnfiltered()
+                val catNameToIdMap = localCats.associate { "${it.name}_${it.firmId}" to it.id }.toMutableMap()
                 for (i in 0 until catArray.length()) {
                     val obj = catArray.getJSONObject(i)
                     val name = obj.getString("name")
-                    if (!catNameToIdMap.containsKey(name)) {
-                        repository.insertCategory(com.example.data.ProductCategoryEntity(name = name))
+                    val firmId = obj.optLong("firmId", 1L)
+                    val key = "${name}_$firmId"
+                    if (!catNameToIdMap.containsKey(key)) {
+                        repository.insertCategory(com.example.data.ProductCategoryEntity(name = name, firmId = firmId))
                     }
                 }
                 // Refresh categories map
-                repository.getAllCategories().forEach { catNameToIdMap[it.name] = it.id }
+                repository.getAllCategoriesUnfiltered().forEach { catNameToIdMap["${it.name}_${it.firmId}"] = it.id }
 
                 val itemArray = root.optJSONArray("items") ?: org.json.JSONArray()
-                val localItems = repository.getAllProductItems()
-                val itemKeys = localItems.map { "${it.name}_${it.categoryName}" }.toSet()
+                val localItems = repository.getAllProductItemsUnfiltered()
+                val itemKeys = localItems.map { "${it.name}_${it.categoryName}_${it.firmId}" }.toSet()
                 for (i in 0 until itemArray.length()) {
                     val obj = itemArray.getJSONObject(i)
                     val name = obj.getString("name")
                     val catName = obj.getString("categoryName")
+                    val firmId = obj.optLong("firmId", 1L)
                     val hsnCode = obj.optString("hsnCode", "")
                     val defaultSellingRate = if (obj.has("defaultSellingRate")) obj.getDouble("defaultSellingRate") else null
                     val defaultDiscountValue = if (obj.has("defaultDiscountValue")) obj.getDouble("defaultDiscountValue") else null
                     val defaultDiscountType = if (obj.has("defaultDiscountType")) obj.getString("defaultDiscountType") else null
-                    val key = "${name}_$catName"
+                    val key = "${name}_${catName}_$firmId"
                     if (!itemKeys.contains(key)) {
                         repository.insertProductItem(com.example.data.ProductItemEntity(
                             name = name,
@@ -1898,15 +2084,16 @@ class BillingViewModel(
                             hsnCode = if (hsnCode.isEmpty()) null else hsnCode,
                             defaultSellingRate = defaultSellingRate,
                             defaultDiscountValue = defaultDiscountValue,
-                            defaultDiscountType = defaultDiscountType
+                            defaultDiscountType = defaultDiscountType,
+                            firmId = firmId
                         ))
                     }
                 }
 
                 // 2. Restore Customers & Supplier profiles
                 val custArray = root.optJSONArray("customers") ?: org.json.JSONArray()
-                val localCusts = repository.getAllCustomersList()
-                val custToIdMap = localCusts.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}" }.mapValues { it.value.id }.toMutableMap()
+                val localCusts = repository.getAllCustomersListUnfiltered()
+                val custToIdMap = localCusts.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}_${it.firmId}" }.mapValues { it.value.id }.toMutableMap()
                 val remoteToLocalCustIdMap = mutableMapOf<Long, Long>()
 
                 for (i in 0 until custArray.length()) {
@@ -1917,8 +2104,9 @@ class BillingViewModel(
                     val email = obj.optString("email", "")
                     val address = obj.optString("address", "")
                     val notes = obj.optString("notes", "")
+                    val firmId = obj.optLong("firmId", 1L)
 
-                    val key = "${name.trim().lowercase()}_${phone.trim()}"
+                    val key = "${name.trim().lowercase()}_${phone.trim()}_$firmId"
                     var lId = custToIdMap[key]
                     if (lId == null) {
                         lId = repository.insertCustomer(com.example.data.CustomerEntity(
@@ -1926,7 +2114,8 @@ class BillingViewModel(
                             phone = phone,
                             email = email,
                             address = address,
-                            notes = notes
+                            notes = notes,
+                            firmId = firmId
                         ))
                         custToIdMap[key] = lId
                     }
@@ -1934,8 +2123,8 @@ class BillingViewModel(
                 }
 
                 val suppArray = root.optJSONArray("suppliers") ?: org.json.JSONArray()
-                val localSupps = repository.getAllSuppliersList()
-                val suppToIdMap = localSupps.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}" }.mapValues { it.value.id }.toMutableMap()
+                val localSupps = repository.getAllSuppliersListUnfiltered()
+                val suppToIdMap = localSupps.associateBy { "${it.name.trim().lowercase()}_${it.phone.trim()}_${it.firmId}" }.mapValues { it.value.id }.toMutableMap()
                 val remoteToLocalSuppIdMap = mutableMapOf<Long, Long>()
 
                 for (i in 0 until suppArray.length()) {
@@ -1946,8 +2135,9 @@ class BillingViewModel(
                     val email = obj.optString("email", "")
                     val address = obj.optString("address", "")
                     val notes = obj.optString("notes", "")
+                    val firmId = obj.optLong("firmId", 1L)
 
-                    val key = "${name.trim().lowercase()}_${phone.trim()}"
+                    val key = "${name.trim().lowercase()}_${phone.trim()}_$firmId"
                     var lId = suppToIdMap[key]
                     if (lId == null) {
                         lId = repository.insertSupplier(com.example.data.SupplierEntity(
@@ -1955,7 +2145,8 @@ class BillingViewModel(
                             phone = phone,
                             email = email,
                             address = address,
-                            notes = notes
+                            notes = notes,
+                            firmId = firmId
                         ))
                         suppToIdMap[key] = lId
                     }
@@ -1964,19 +2155,20 @@ class BillingViewModel(
 
                 // 3. Restore Customer and Supplier Payments
                 val custPayArray = root.optJSONArray("customerPayments") ?: org.json.JSONArray()
-                val localCustPayments = repository.getAllCustomerPaymentsList()
-                val custPayKeys = localCustPayments.map { "${it.customerId}_${it.amount}_${it.date}" }.toSet()
+                val localCustPayments = repository.getAllCustomerPaymentsListUnfiltered()
+                val custPayKeys = localCustPayments.map { "${it.customerId}_${it.amount}_${it.date}_${it.firmId}" }.toSet()
                 for (i in 0 until custPayArray.length()) {
                     val obj = custPayArray.getJSONObject(i)
                     val rCustId = obj.getLong("customerId")
                     val lCustId = remoteToLocalCustIdMap[rCustId] ?: continue
                     val amount = obj.getDouble("amount")
-                    val date = obj.getLong("date")
+                    val date = obj.optLong("date", System.currentTimeMillis())
                     val payMode = obj.optString("paymentMode", "Cash")
                     val refNo = obj.optString("referenceNo", "")
                     val notes = obj.optString("notes", "")
+                    val firmId = obj.optLong("firmId", 1L)
 
-                    val key = "${lCustId}_${amount}_$date"
+                    val key = "${lCustId}_${amount}_${date}_$firmId"
                     if (!custPayKeys.contains(key)) {
                         repository.insertCustomerPayment(com.example.data.CustomerPaymentEntity(
                             customerId = lCustId,
@@ -1984,25 +2176,27 @@ class BillingViewModel(
                             date = date,
                             paymentMode = payMode,
                             referenceNo = refNo,
-                            notes = notes
+                            notes = notes,
+                            firmId = firmId
                         ))
                     }
                 }
 
                 val suppPayArray = root.optJSONArray("supplierPayments") ?: org.json.JSONArray()
-                val localSuppPayments = repository.getAllSupplierPaymentsList()
-                val suppPayKeys = localSuppPayments.map { "${it.supplierId}_${it.amount}_${it.date}" }.toSet()
+                val localSuppPayments = repository.getAllSupplierPaymentsListUnfiltered()
+                val suppPayKeys = localSuppPayments.map { "${it.supplierId}_${it.amount}_${it.date}_${it.firmId}" }.toSet()
                 for (i in 0 until suppPayArray.length()) {
                     val obj = suppPayArray.getJSONObject(i)
                     val rSuppId = obj.getLong("supplierId")
                     val lSuppId = remoteToLocalSuppIdMap[rSuppId] ?: continue
                     val amount = obj.getDouble("amount")
-                    val date = obj.getLong("date")
+                    val date = obj.optLong("date", System.currentTimeMillis())
                     val payMode = obj.optString("paymentMode", "Cash")
                     val refNo = obj.optString("referenceNo", "")
                     val notes = obj.optString("notes", "")
+                    val firmId = obj.optLong("firmId", 1L)
 
-                    val key = "${lSuppId}_${amount}_$date"
+                    val key = "${lSuppId}_${amount}_${date}_$firmId"
                     if (!suppPayKeys.contains(key)) {
                         repository.insertSupplierPayment(com.example.data.SupplierPaymentEntity(
                             supplierId = lSuppId,
@@ -2010,15 +2204,16 @@ class BillingViewModel(
                             date = date,
                             paymentMode = payMode,
                             referenceNo = refNo,
-                            notes = notes
+                            notes = notes,
+                            firmId = firmId
                         ))
                     }
                 }
 
                 // 4. Restore Invoices & Items
                 val invArray = root.optJSONArray("invoices") ?: org.json.JSONArray()
-                val localInvoices = repository.getAllInvoicesList()
-                val localInvNos = localInvoices.associateBy { it.invoiceNumber }
+                val localInvoices = repository.getAllInvoicesListUnfiltered()
+                val localInvNos = localInvoices.associateBy { "${it.invoiceNumber}_${it.firmId}" }
                 val remoteToLocalInvIdMap = mutableMapOf<Long, Long>()
 
                 for (i in 0 until invArray.length()) {
@@ -2035,8 +2230,10 @@ class BillingViewModel(
                     val credit = obj.optBoolean("isCreditSale", false)
                     val outstanding = obj.optDouble("outstandingAmount", 0.0)
                     val dueDate = obj.optLong("dueDate", 0L)
+                    val firmId = obj.optLong("firmId", 1L)
 
-                    var existing = localInvNos[number]
+                    val key = "${number}_$firmId"
+                    var existing = localInvNos[key]
                     if (existing == null) {
                         // Create invoice directly to get custom invoiceNumber
                         val newId = com.example.data.AppDatabase.getDatabase(application).invoiceDao().insertInvoice(
@@ -2051,7 +2248,8 @@ class BillingViewModel(
                                 notes = notes,
                                 isCreditSale = credit,
                                 outstandingAmount = outstanding,
-                                dueDate = dueDate
+                                dueDate = dueDate,
+                                firmId = firmId
                             )
                         )
                         remoteToLocalInvIdMap[rId] = newId
@@ -2097,9 +2295,10 @@ class BillingViewModel(
                     val obj = seqArray.getJSONObject(i)
                     val type = obj.getString("type")
                     val value = obj.getInt("lastVal")
-                    val currentStored = repository.getLastSequenceValue(type) ?: 0
+                    val firmId = obj.optLong("firmId", 1L)
+                    val currentStored = repository.getLastSequenceValue(firmId, type) ?: 0
                     if (value > currentStored) {
-                        repository.insertSequenceValue(com.example.data.InvoiceSequenceEntity(type, value))
+                        repository.insertSequenceValue(com.example.data.InvoiceSequenceEntity(firmId = firmId, type = type, lastVal = value))
                     }
                 }
 

@@ -11,5 +11,6 @@ data class ProductItemEntity(
     val hsnCode: String? = null,
     val defaultSellingRate: Double? = null,
     val defaultDiscountValue: Double? = null,
-    val defaultDiscountType: String? = null
+    val defaultDiscountType: String? = null,
+    val firmId: Long = 1L
 )

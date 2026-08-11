@@ -68,6 +68,12 @@ import android.webkit.WebViewClient
 import android.print.PrintManager
 import android.print.PrintAttributes
 import android.content.Context
+import android.content.ContextWrapper
+import android.widget.Toast
+import androidx.fragment.app.FragmentActivity
+import androidx.biometric.BiometricPrompt
+import androidx.biometric.BiometricManager
+import androidx.core.content.ContextCompat
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -167,11 +173,16 @@ fun BillingAppContent(viewModel: BillingViewModel) {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
 fun DashboardScreen(viewModel: BillingViewModel) {
     val stats by viewModel.dashboardStats.collectAsStateWithLifecycle()
     val recentInvoices by viewModel.invoices.collectAsStateWithLifecycle()
     val businessProfileState by viewModel.businessProfile.collectAsStateWithLifecycle()
     val isPrivacyHidden by viewModel.isPrivacyHidden.collectAsStateWithLifecycle()
+
+    var showFirmBottomSheet by remember { mutableStateOf(false) }
+    val firms by viewModel.allFirms.collectAsStateWithLifecycle()
+    val currentFirmId by viewModel.currentFirmId.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -200,12 +211,27 @@ fun DashboardScreen(viewModel: BillingViewModel) {
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = businessProfileState?.firmName?.takeIf { it.isNotEmpty() } ?: "VM BOOK",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .clickable { showFirmBottomSheet = true }
+                    .testTag("firm_dropdown_trigger")
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = businessProfileState?.firmName?.takeIf { it.isNotEmpty() } ?: "VM BOOK",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.testTag("current_firm_name_text")
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = "Switch Firm",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
                 Text(
                     text = "Simple, Smart & Complete Billing",
                     style = MaterialTheme.typography.bodyMedium,
@@ -231,6 +257,195 @@ fun DashboardScreen(viewModel: BillingViewModel) {
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Business Profile",
                     tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+
+        if (showFirmBottomSheet) {
+            var showCreateFirmDialog by remember { mutableStateOf(false) }
+
+            ModalBottomSheet(
+                onDismissRequest = { showFirmBottomSheet = false },
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                modifier = Modifier.testTag("firm_select_bottom_sheet")
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 16.dp)
+                ) {
+                    Text(
+                        text = "SELECT FIRM",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f, fill = false),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(firms) { firm ->
+                            val isSelected = firm.id == currentFirmId
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        else Color.Transparent
+                                    )
+                                    .clickable {
+                                        viewModel.selectFirm(firm.id)
+                                        showFirmBottomSheet = false
+                                    }
+                                    .padding(16.dp)
+                                    .testTag("firm_item_${firm.id}"),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .clip(CircleShape)
+                                        .background(Color(0xFF2196F3)),
+                                    contentAlignment = Alignment.Center
+                                ) {}
+                                Spacer(modifier = Modifier.width(16.dp))
+                                Text(
+                                    text = firm.name,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Selected",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    Button(
+                        onClick = {
+                            showCreateFirmDialog = true
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(50.dp)
+                            .testTag("create_new_firm_button"),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Create New Firm"
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "CREATE NEW FIRM",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
+            if (showCreateFirmDialog) {
+                var newFirmName by remember { mutableStateOf("") }
+                var newFirmPhone by remember { mutableStateOf("") }
+                var newFirmGstin by remember { mutableStateOf("") }
+                var newFirmAddress by remember { mutableStateOf("") }
+                var newFirmEmail by remember { mutableStateOf("") }
+                
+                AlertDialog(
+                    onDismissRequest = { showCreateFirmDialog = false },
+                    title = { Text("Create New Firm") },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = newFirmName,
+                                onValueChange = { newFirmName = it },
+                                label = { Text("Firm/Business Name *") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_firm_name_input"),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = newFirmPhone,
+                                onValueChange = { newFirmPhone = it },
+                                label = { Text("Phone Number") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_firm_phone_input"),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = newFirmGstin,
+                                onValueChange = { newFirmGstin = it },
+                                label = { Text("GSTIN") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_firm_gstin_input"),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = newFirmAddress,
+                                onValueChange = { newFirmAddress = it },
+                                label = { Text("Address") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_firm_address_input"),
+                                singleLine = true
+                            )
+                            OutlinedTextField(
+                                value = newFirmEmail,
+                                onValueChange = { newFirmEmail = it },
+                                label = { Text("Email") },
+                                modifier = Modifier.fillMaxWidth().testTag("new_firm_email_input"),
+                                singleLine = true
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                if (newFirmName.trim().isNotEmpty()) {
+                                    viewModel.createNewFirm(
+                                        name = newFirmName.trim(),
+                                        phone = newFirmPhone.trim(),
+                                        email = newFirmEmail.trim(),
+                                        address = newFirmAddress.trim(),
+                                        gstin = newFirmGstin.trim()
+                                    )
+                                    showCreateFirmDialog = false
+                                    showFirmBottomSheet = false
+                                }
+                            },
+                            enabled = newFirmName.trim().isNotEmpty(),
+                            modifier = Modifier.testTag("confirm_create_firm_button")
+                        ) {
+                            Text("Create")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(
+                            onClick = { showCreateFirmDialog = false },
+                            modifier = Modifier.testTag("dismiss_create_firm_button")
+                        ) {
+                            Text("Cancel")
+                        }
+                    }
                 )
             }
         }
@@ -1309,6 +1524,7 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
     val itemNameSuggestions by viewModel.distinctItemNames.collectAsStateWithLifecycle()
     val categories by viewModel.productCategories.collectAsStateWithLifecycle()
     val allProductItems by viewModel.productItems.collectAsStateWithLifecycle()
+    val stockBalances by viewModel.stockBalances.collectAsStateWithLifecycle()
     val invoiceError by viewModel.formErrorMessage
     var showDatePicker by remember { mutableStateOf(false) }
 
@@ -1820,6 +2036,83 @@ fun AddInvoiceScreen(viewModel: BillingViewModel) {
                                     }
                                 }
                             )
+                        }
+
+                        // Dynamic Stock Display
+                        if (draftItem.name.isNotEmpty()) {
+                            val stockItem = stockBalances.find { it.name.trim().equals(draftItem.name.trim(), ignoreCase = true) }
+                            val currentStockVal = stockItem?.currentStock ?: 0.0
+                            val itemUnit = getDeterministicUnit(draftItem.name)
+                            val currentStockStr = if (currentStockVal % 1 == 0.0) currentStockVal.toInt().toString() else String.format(Locale.US, "%.2f", currentStockVal)
+                            
+                            val qtyEnteredVal = draftItem.quantity.toDoubleOrNull() ?: 0.0
+                            val isSale = currentType == "SALE"
+                            val stockAfterVal = if (isSale) currentStockVal - qtyEnteredVal else currentStockVal + qtyEnteredVal
+                            val stockAfterStr = if (stockAfterVal % 1 == 0.0) stockAfterVal.toInt().toString() else String.format(Locale.US, "%.2f", stockAfterVal)
+                            val isOverStock = isSale && qtyEnteredVal > currentStockVal
+                            
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isOverStock) {
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f)
+                                } else {
+                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+                                },
+                                modifier = Modifier
+                                    .padding(vertical = 4.dp)
+                                    .fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Default.Info,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(16.dp),
+                                                tint = if (isOverStock) {
+                                                    MaterialTheme.colorScheme.error
+                                                } else {
+                                                    MaterialTheme.colorScheme.primary
+                                                }
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = "Available Stock: $currentStockStr $itemUnit",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (isOverStock) {
+                                                    MaterialTheme.colorScheme.onErrorContainer
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
+                                            )
+                                        }
+                                        Text(
+                                            text = if (isSale) "Stock After Sale: $stockAfterStr $itemUnit" else "Stock After Purchase: $stockAfterStr $itemUnit",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (isSale && stockAfterVal < 0.0) {
+                                                MaterialTheme.colorScheme.error
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                    if (isOverStock) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = "⚠️ Warning: Requested quantity exceeds available stock!",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
+                            }
                         }
 
                         // Auto Filled HSN Display
@@ -9038,7 +9331,32 @@ fun LockScreen(viewModel: BillingViewModel) {
 
     var wrongAttempts by remember { mutableStateOf(0) }
     var lockoutSecondsLeft by remember { mutableStateOf(0) }
-    var showBiometricDialog by remember { mutableStateOf(false) }
+
+    fun triggerBiometric() {
+        showBiometricAuthentication(
+            context = context,
+            title = "VM BOOK Lock",
+            subtitle = "Scan your fingerprint to unlock VM BOOK",
+            negativeButtonText = "Use PIN",
+            onSuccess = { result ->
+                if (result != null) {
+                    viewModel.setScreen(BillingScreen.DASHBOARD)
+                }
+            },
+            onError = { errorCode, errString ->
+                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                    Toast.makeText(context, "Authentication failed: $errString", Toast.LENGTH_SHORT).show()
+                }
+            }
+        )
+    }
+
+    // Auto-trigger biometric on load if enabled
+    if (isFingerprintEnabled && lockoutSecondsLeft <= 0) {
+        LaunchedEffect(Unit) {
+            triggerBiometric()
+        }
+    }
 
     // Lockout countdown timer
     if (lockoutSecondsLeft > 0) {
@@ -9046,69 +9364,6 @@ fun LockScreen(viewModel: BillingViewModel) {
             delay(1000)
             lockoutSecondsLeft -= 1
         }
-    }
-
-    // Biometric dialog simulation
-    if (showBiometricDialog) {
-        AlertDialog(
-            onDismissRequest = { showBiometricDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Fingerprint,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Biometric Authentication", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Touch the fingerprint sensor to unlock VM BOOK",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Pulsing/animated fingerprint icon
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                            .clickable {
-                                // Simulate successful verification
-                                showBiometricDialog = false
-                                android.widget.Toast.makeText(context, "Biometric verified successfully!", android.widget.Toast.LENGTH_SHORT).show()
-                                viewModel.setScreen(BillingScreen.DASHBOARD)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Fingerprint,
-                            contentDescription = "Fingerprint Sensor",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "Tap the fingerprint icon above to simulate scan",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { showBiometricDialog = false }) {
-                    Text("Cancel")
-                }
-            }
-        )
     }
 
     Box(
@@ -9228,7 +9483,7 @@ fun LockScreen(viewModel: BillingViewModel) {
                                             }
                                         } else if (key == "F") {
                                             if (isFingerprintEnabled) {
-                                                showBiometricDialog = true
+                                                triggerBiometric()
                                             } else {
                                                 android.widget.Toast.makeText(context, "Biometric lock is disabled. Please set it up in Settings.", android.widget.Toast.LENGTH_SHORT).show()
                                             }
@@ -9612,65 +9867,42 @@ fun PasswordVerificationDialog(
     val context = LocalContext.current
     var inputPassword by remember { mutableStateOf("") }
     var isPwdVisible by remember { mutableStateOf(false) }
-    var showBiometricDialog by remember { mutableStateOf(viewModel.isTransactionFingerprintEnabled()) }
+    val isBiometricEnabled = viewModel.isTransactionFingerprintEnabled()
 
     val correctPassword = viewModel.getTransactionPassword()
 
-    if (showBiometricDialog) {
-        AlertDialog(
-            onDismissRequest = { showBiometricDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Default.Fingerprint,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(28.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Biometric Verification", fontWeight = FontWeight.Bold)
+    fun triggerBiometric() {
+        showBiometricAuthentication(
+            context = context,
+            title = "Transaction Authorization",
+            subtitle = "Scan fingerprint to authorize transaction",
+            onSuccess = { result ->
+                if (result != null) {
+                    onVerified()
                 }
             },
-            text = {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        "Scan fingerprint to verify transaction authorization",
-                        textAlign = TextAlign.Center,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(72.dp)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-                            .clickable {
-                                android.widget.Toast.makeText(context, "Biometric verified!", android.widget.Toast.LENGTH_SHORT).show()
-                                onVerified()
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.Fingerprint,
-                            contentDescription = "Fingerprint Sensor",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(44.dp)
-                        )
-                    }
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showBiometricDialog = false }) {
-                    Text("Use Password")
+            onError = { errorCode, errString ->
+                if (errorCode != BiometricPrompt.ERROR_USER_CANCELED && errorCode != BiometricPrompt.ERROR_NEGATIVE_BUTTON) {
+                    Toast.makeText(context, "Verification failed: $errString", Toast.LENGTH_SHORT).show()
                 }
             }
         )
-    } else {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = {
+    }
+
+    if (isBiometricEnabled) {
+        LaunchedEffect(Unit) {
+            triggerBiometric()
+        }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.Security,
@@ -9681,55 +9913,64 @@ fun PasswordVerificationDialog(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Enter Transaction Password", fontWeight = FontWeight.Bold)
                 }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        "This action is protected. Please enter your transaction password to proceed.",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    OutlinedTextField(
-                        value = inputPassword,
-                        onValueChange = { input -> if (input.all { it.isDigit() }) inputPassword = input },
-                        label = { Text("Password") },
-                        visualTransformation = if (isPwdVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth().testTag("input_tx_verification_pwd")
-                    )
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.clickable { isPwdVisible = !isPwdVisible }
-                    ) {
-                        Checkbox(checked = isPwdVisible, onCheckedChange = { isPwdVisible = it })
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Show Password", style = MaterialTheme.typography.bodyMedium)
+                if (isBiometricEnabled) {
+                    IconButton(onClick = { triggerBiometric() }) {
+                        Icon(
+                            Icons.Default.Fingerprint,
+                            contentDescription = "Scan Fingerprint",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (inputPassword == correctPassword) {
-                            onVerified()
-                        } else {
-                            android.widget.Toast.makeText(context, "Incorrect Password!", android.widget.Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp)
+            }
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "This action is protected. Please enter your transaction password to proceed.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = inputPassword,
+                    onValueChange = { input -> if (input.all { it.isDigit() }) inputPassword = input },
+                    label = { Text("Password") },
+                    visualTransformation = if (isPwdVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    singleLine = true,
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("input_tx_verification_pwd")
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { isPwdVisible = !isPwdVisible }
                 ) {
-                    Text("Verify")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel")
+                    Checkbox(checked = isPwdVisible, onCheckedChange = { isPwdVisible = it })
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Show Password", style = MaterialTheme.typography.bodyMedium)
                 }
             }
-        )
-    }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    if (inputPassword == correctPassword) {
+                        onVerified()
+                    } else {
+                        android.widget.Toast.makeText(context, "Incorrect Password!", android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                },
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Text("Verify")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 @Composable
@@ -9947,6 +10188,65 @@ fun AppUpdateHandler(viewModel: BillingViewModel) {
             )
         }
         else -> {}
+    }
+}
+
+private fun Context.findActivity(): FragmentActivity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is FragmentActivity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
+
+private fun showBiometricAuthentication(
+    context: Context,
+    title: String,
+    subtitle: String,
+    negativeButtonText: String = "Cancel",
+    onSuccess: (BiometricPrompt.AuthenticationResult) -> Unit,
+    onError: (Int, String) -> Unit = { _, _ -> }
+) {
+    val activity = context.findActivity()
+    if (activity == null) {
+        Toast.makeText(context, "FragmentActivity not found", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val executor = ContextCompat.getMainExecutor(activity)
+    val biometricPrompt = BiometricPrompt(
+        activity,
+        executor,
+        object : BiometricPrompt.AuthenticationCallback() {
+            override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
+                super.onAuthenticationError(errorCode, errString)
+                onError(errorCode, errString.toString())
+            }
+
+            override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                super.onAuthenticationSucceeded(result)
+                onSuccess(result)
+            }
+
+            override fun onAuthenticationFailed() {
+                super.onAuthenticationFailed()
+            }
+        }
+    )
+
+    val promptInfo = BiometricPrompt.PromptInfo.Builder()
+        .setTitle(title)
+        .setSubtitle(subtitle)
+        .setNegativeButtonText(negativeButtonText)
+        .build()
+
+    try {
+        biometricPrompt.authenticate(promptInfo)
+    } catch (e: Exception) {
+        Toast.makeText(context, "Biometric error: ${e.localizedMessage}", Toast.LENGTH_SHORT).show()
     }
 }
 

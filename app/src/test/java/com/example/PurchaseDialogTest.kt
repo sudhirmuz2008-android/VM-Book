@@ -38,7 +38,8 @@ class PurchaseDialogTest {
       database.invoiceDao(),
       database.customerDao(),
       database.supplierDao(),
-      database.productDao()
+      database.productDao(),
+      database.firmDao()
     )
   }
 

@@ -10,5 +10,6 @@ data class CustomerEntity(
     val phone: String = "",
     val email: String = "",
     val address: String = "",
-    val notes: String = ""
+    val notes: String = "",
+    val firmId: Long = 1L
 )
