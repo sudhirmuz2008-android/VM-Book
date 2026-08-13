@@ -1,10 +1,8 @@
-name: Build Fresh Debug APK
+name: Build Fresh Release APK
 
 on:
   push:
-    branches: [ "*" ]
-  pull_request:
-    branches: [ "*" ]
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
@@ -22,17 +20,26 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
+      - name: Restore Debug Keystore
+        run: |
+          if [ -f "debug.keystore.base64" ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+            echo "debug.keystore restored successfully from base64"
+          else
+            echo "debug.keystore.base64 not found, relying on local/generated keystore if available"
+          fi
+
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 
-      - name: Clean and Build Debug APK
-        run: ./gradlew clean :app:assembleDebug --stacktrace
+      - name: Clean and Build Release APK
+        run: ./gradlew clean assembleRelease --stacktrace
 
       - name: Verify APK Generation
         run: |
-          APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
+          APK_PATH="app/build/outputs/apk/release/app-release.apk"
           if [ ! -f "$APK_PATH" ]; then
-            echo "::error::Debug APK was not generated at $APK_PATH!"
+            echo "::error::Release APK was not generated at $APK_PATH!"
             exit 1
           fi
           
@@ -41,14 +48,14 @@ jobs:
           
           # Check if the APK file size is greater than 1 MB (1048576 bytes)
           if [ "$FILE_SIZE" -lt 1048576 ]; then
-            echo "::error::Debug APK size is less than 1 MB!"
+            echo "::error::Release APK size is less than 1 MB!"
             exit 1
           fi
           
           echo "APK successfully verified."
 
-      - name: Upload Debug APK Artifact
+      - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: fresh-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: VM-Book-Release-APK
+          path: app/build/outputs/apk/release/app-release.apk
