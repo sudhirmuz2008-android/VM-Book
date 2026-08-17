@@ -31,6 +31,12 @@ jobs:
             echo "debug.keystore.base64 not found, relying on local/generated keystore if available"
           fi
 
+      - name: Fix/Download Clean Gradle Wrapper
+        run: |
+          mkdir -p gradle/wrapper
+          curl -sSL https://raw.githubusercontent.com/gradle/gradle/v9.3.1/gradle/wrapper/gradle-wrapper.jar -o gradle/wrapper/gradle-wrapper.jar
+          echo "Fresh gradle-wrapper.jar downloaded successfully"
+
       - name: Grant Execute Permission to Gradlew
         run: chmod +x gradlew
 

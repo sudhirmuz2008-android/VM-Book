@@ -1,0 +1,4 @@
+# Force binary files to be treated as binary to prevent corruption in git
+*.jar binary
+*.png binary
+*.keystore binary
