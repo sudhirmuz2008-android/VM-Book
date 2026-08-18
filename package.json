@@ -1,0 +1,20 @@
+{
+  "name": "vm-book",
+  "version": "1.2.0",
+  "description": "VM BOOK - Offline Billing & Invoicing Android Application",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "build": "./gradlew assembleRelease",
+    "build:debug": "./gradlew assembleDebug",
+    "build:release": "./gradlew assembleRelease"
+  },
+  "keywords": [
+    "android",
+    "billing",
+    "invoicing",
+    "compose"
+  ],
+  "author": "VM Book",
+  "license": "UNLICENSED"
+}
